@@ -16,9 +16,11 @@ using NLog;
 
 namespace HelpDesk.Web.Controllers;
 
-/// <summary>JSON login/logout from fetch() does not send antiforgery tokens; ignore for these endpoints.</summary>
-/// <remarks>[ApiController] is omitted so <c>login-form</c> accepts <c>application/x-www-form-urlencoded</c> POSTs reliably.</remarks>
-[IgnoreAntiforgeryToken]
+/// <remarks>
+/// [ApiController] is omitted so <c>login-form</c> accepts <c>application/x-www-form-urlencoded</c> POSTs reliably.
+/// Antiforgery is handled per-endpoint: JSON/fetch endpoints ignore it (custom headers provide implicit CSRF defense),
+/// and form-POST endpoints are protected by SameSite=Lax cookies plus endpoint-level security (credentials / secret tokens).
+/// </remarks>
 [Route("api/[controller]")]
 public class AccountController : ControllerBase
 {
@@ -28,6 +30,7 @@ public class AccountController : ControllerBase
     private readonly PasswordResetService _passwordReset;
     private readonly EmailSender _email;
     private readonly IConfiguration _configuration;
+    private readonly LoginRateLimiter _rateLimiter;
 
     public AccountController(
         HelpDeskDbContext db,
@@ -35,7 +38,8 @@ public class AccountController : ControllerBase
         PasswordHasher<User> hasher,
         PasswordResetService passwordReset,
         EmailSender email,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        LoginRateLimiter rateLimiter)
     {
         _db = db;
         _observability = observability;
@@ -43,11 +47,13 @@ public class AccountController : ControllerBase
         _passwordReset = passwordReset;
         _email = email;
         _configuration = configuration;
+        _rateLimiter = rateLimiter;
     }
 
     public record LoginRequest(string LoginId, string Password, string? ReturnUrl);
 
     [AllowAnonymous]
+    [IgnoreAntiforgeryToken]
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest req, CancellationToken ct)
     {
@@ -55,14 +61,28 @@ public class AccountController : ControllerBase
         if (string.IsNullOrEmpty(loginId) || string.IsNullOrWhiteSpace(req.Password))
             return BadRequest("Login ID and password required.");
 
+        if (_rateLimiter.IsBlocked(loginId, out var retryAfter))
+        {
+            var minutes = (int)Math.Ceiling(retryAfter.TotalMinutes);
+            return Unauthorized(new { error = $"Too many failed attempts. Try again in {minutes} minute(s)." });
+        }
+
         var user = await _db.Users.FirstOrDefaultAsync(u => u.LoginId == loginId && u.IsActive, ct)
             .ConfigureAwait(false);
         if (user is null)
+        {
+            _rateLimiter.RecordFailure(loginId);
             return Unauthorized();
+        }
 
         var verify = _hasher.VerifyHashedPassword(user, user.PasswordHash, req.Password);
         if (verify == PasswordVerificationResult.Failed)
+        {
+            _rateLimiter.RecordFailure(loginId);
             return Unauthorized();
+        }
+
+        _rateLimiter.RecordSuccess(loginId);
 
         var claims = CookieAuthClaims.BuildForFormsUser(user);
 
@@ -80,14 +100,16 @@ public class AccountController : ControllerBase
 
         ClearSuppressWindowsAutoLoginCookie();
 
-        var url = string.IsNullOrEmpty(req.ReturnUrl) ? "/" : req.ReturnUrl;
+        var url = string.IsNullOrEmpty(req.ReturnUrl) || !Url.IsLocalUrl(req.ReturnUrl) ? "/" : req.ReturnUrl;
         if (user.MustChangePassword)
             url = $"/account/first-login-password?returnUrl={Uri.EscapeDataString(url)}";
         return Ok(new { ok = true, mustChangePassword = user.MustChangePassword, returnUrl = url });
     }
 
     /// <summary>Browser form POST (no Blazor circuit / no JavaScript required). Primary login path for reliability.</summary>
+    /// <remarks>Antiforgery tokens cannot be rendered in interactive-mode Blazor; SameSite=Lax cookies mitigate cross-site POST.</remarks>
     [AllowAnonymous]
+    [IgnoreAntiforgeryToken]
     [HttpPost("login-form")]
     public async Task<IActionResult> LoginForm(
         [FromForm] string? loginId,
@@ -99,14 +121,25 @@ public class AccountController : ControllerBase
         if (string.IsNullOrEmpty(normalized) || string.IsNullOrWhiteSpace(password))
             return Redirect("/login?loginError=required");
 
+        if (_rateLimiter.IsBlocked(normalized, out _))
+            return Redirect("/login?loginError=locked");
+
         var user = await _db.Users.FirstOrDefaultAsync(u => u.LoginId == normalized && u.IsActive, ct)
             .ConfigureAwait(false);
         if (user is null)
+        {
+            _rateLimiter.RecordFailure(normalized);
             return Redirect("/login?loginError=invalid");
+        }
 
         var verify = _hasher.VerifyHashedPassword(user, user.PasswordHash, password);
         if (verify == PasswordVerificationResult.Failed)
+        {
+            _rateLimiter.RecordFailure(normalized);
             return Redirect("/login?loginError=invalid");
+        }
+
+        _rateLimiter.RecordSuccess(normalized);
 
         var claims = CookieAuthClaims.BuildForFormsUser(user);
 
@@ -136,6 +169,7 @@ public class AccountController : ControllerBase
 
     /// <summary>Change password while signed in (required when <see cref="User.MustChangePassword"/> is true).</summary>
     [Authorize]
+    [IgnoreAntiforgeryToken]
     [HttpPost("set-password")]
     public async Task<IActionResult> SetPassword([FromBody] SetPasswordRequest req, CancellationToken ct)
     {
@@ -177,6 +211,7 @@ public class AccountController : ControllerBase
     }
 
     [Authorize]
+    [IgnoreAntiforgeryToken]
     [HttpPost("logout")]
     public async Task<IActionResult> Logout(CancellationToken ct)
     {
@@ -234,12 +269,14 @@ public class AccountController : ControllerBase
         Response.Cookies.Delete(AuthCookieNames.SuppressWindowsAutoLogin, new CookieOptions { Path = "/" });
 
     [Authorize]
+    [IgnoreAntiforgeryToken]
     [HttpPost("session/ping")]
     public IActionResult Ping() => Ok();
 
     public record RequestPasswordChangeRequest(string Email);
 
     [AllowAnonymous]
+    [IgnoreAntiforgeryToken]
     [HttpPost("request-password-change")]
     public async Task<IActionResult> RequestPasswordChange([FromBody] RequestPasswordChangeRequest req, CancellationToken ct)
     {
@@ -258,6 +295,7 @@ public class AccountController : ControllerBase
 
     /// <summary>Forgot password: looks up email by login ID and sends a reset link valid for 10 minutes.</summary>
     [AllowAnonymous]
+    [IgnoreAntiforgeryToken]
     [HttpPost("request-password-reset-by-login")]
     public async Task<IActionResult> RequestPasswordResetByLogin([FromBody] RequestPasswordResetByLoginRequest req, CancellationToken ct)
     {
@@ -276,7 +314,9 @@ public class AccountController : ControllerBase
     }
 
     /// <summary>Browser form POST for forgot password (same reliability as <c>login-form</c>; no Blazor circuit required).</summary>
+    /// <remarks>Antiforgery tokens cannot be rendered in interactive-mode Blazor; SameSite=Lax cookies mitigate cross-site POST.</remarks>
     [AllowAnonymous]
+    [IgnoreAntiforgeryToken]
     [HttpPost("request-password-reset-by-login-form")]
     public async Task<IActionResult> RequestPasswordResetByLoginForm(
         [FromForm] string? loginId,
@@ -342,6 +382,7 @@ public class AccountController : ControllerBase
     public record ResetPasswordRequest(string Token, string NewPassword);
 
     [AllowAnonymous]
+    [IgnoreAntiforgeryToken]
     [HttpPost("reset-password")]
     public async Task<IActionResult> ResetPasswordApi([FromBody] ResetPasswordRequest req, CancellationToken ct)
     {
@@ -354,7 +395,9 @@ public class AccountController : ControllerBase
     }
 
     /// <summary>Browser form POST for reset password (no Blazor circuit required; pairs with <c>data-enhance="false"</c>).</summary>
+    /// <remarks>Antiforgery tokens cannot be rendered in interactive-mode Blazor; SameSite=Lax cookies mitigate cross-site POST. Requires a valid secret token.</remarks>
     [AllowAnonymous]
+    [IgnoreAntiforgeryToken]
     [HttpPost("reset-password-form")]
     public async Task<IActionResult> ResetPasswordForm(
         [FromForm] string? token,

@@ -28,33 +28,64 @@ public class HelpDeskDbContext : DbContext
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         var pending = BuildPendingHistories();
-        var n = base.SaveChanges(acceptAllChangesOnSuccess);
-        if (pending.Count > 0)
+        if (pending.Count == 0)
+            return base.SaveChanges(acceptAllChangesOnSuccess);
+
+        var ownsTransaction = Database.CurrentTransaction is null;
+        var transaction = Database.CurrentTransaction ?? Database.BeginTransaction();
+        try
         {
+            var n = base.SaveChanges(acceptAllChangesOnSuccess);
             foreach (var (row, entry) in pending)
             {
                 row.EntityId = ResolveEntityId(entry);
                 EntityChangeHistories.Add(row);
             }
             base.SaveChanges(acceptAllChangesOnSuccess);
+            if (ownsTransaction) transaction.Commit();
+            return n;
         }
-        return n;
+        catch
+        {
+            if (ownsTransaction) transaction.Rollback();
+            throw;
+        }
+        finally
+        {
+            if (ownsTransaction) transaction.Dispose();
+        }
     }
 
     public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
     {
         var pending = BuildPendingHistories();
-        var n = await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken).ConfigureAwait(false);
-        if (pending.Count > 0)
+        if (pending.Count == 0)
+            return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken).ConfigureAwait(false);
+
+        var ownsTransaction = Database.CurrentTransaction is null;
+        var transaction = Database.CurrentTransaction
+            ?? await Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
+            var n = await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken).ConfigureAwait(false);
             foreach (var (row, entry) in pending)
             {
                 row.EntityId = ResolveEntityId(entry);
                 EntityChangeHistories.Add(row);
             }
             await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken).ConfigureAwait(false);
+            if (ownsTransaction) await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            return n;
         }
-        return n;
+        catch
+        {
+            if (ownsTransaction) await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            throw;
+        }
+        finally
+        {
+            if (ownsTransaction) await transaction.DisposeAsync().ConfigureAwait(false);
+        }
     }
 
     private List<(EntityChangeHistory Row, EntityEntry Entry)> BuildPendingHistories()

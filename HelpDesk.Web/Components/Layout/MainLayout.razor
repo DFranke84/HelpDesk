@@ -255,7 +255,7 @@
 
 
 
-    public ValueTask DisposeAsync()
+    public async ValueTask DisposeAsync()
 
     {
 
@@ -267,9 +267,9 @@
 
         _clockTimer = null;
 
-        _idleRef?.Dispose();
+        try { await JS.InvokeVoidAsync("helpdeskIdle.stop"); } catch { }
 
-        return ValueTask.CompletedTask;
+        _idleRef?.Dispose();
 
     }
 

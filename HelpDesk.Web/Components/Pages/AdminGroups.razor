@@ -10,7 +10,7 @@
 
 @using Microsoft.AspNetCore.Components
 
-@inject HelpDesk.Models.Data.HelpDeskDbContext Db
+@inject IDbContextFactory<HelpDesk.Models.Data.HelpDeskDbContext> DbFactory
 
 @inject IMenuRefreshNotifier MenuRefresh
 
@@ -111,7 +111,8 @@
     [JSInvokable]
     public async Task OpenEdit(int id)
     {
-        var g = await Db.Groups.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
+        await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
+        var g = await db.Groups.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
         if (g is null)
         {
             _msg = "Group not found.";
@@ -129,7 +130,8 @@
     [JSInvokable]
     public async Task PromptDelete(int id)
     {
-        var g = await Db.Groups.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
+        await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
+        var g = await db.Groups.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
         if (g is null)
         {
             _msg = "Not found.";
@@ -139,12 +141,12 @@
         if (!await JS.InvokeAsync<bool>("confirm", $"Delete group \"{g.Name}\"? User assignments and application links for this group will be removed.").ConfigureAwait(false))
             return;
 
-        var row = await Db.Groups.FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
+        var row = await db.Groups.FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
         if (row is null)
             return;
 
-        Db.Groups.Remove(row);
-        if (!await Db.TrySaveChangesAsync(JS).ConfigureAwait(false))
+        db.Groups.Remove(row);
+        if (!await db.TrySaveChangesAsync(JS).ConfigureAwait(false))
             return;
         if (_editingId == id)
         {
@@ -172,7 +174,8 @@
             return;
         if (_editingId is { } gid)
         {
-            var g = await Db.Groups.AsNoTracking().FirstOrDefaultAsync(x => x.Id == gid).ConfigureAwait(false);
+            await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
+            var g = await db.Groups.AsNoTracking().FirstOrDefaultAsync(x => x.Id == gid).ConfigureAwait(false);
             if (g is not null)
                 await OpenEdit(g.Id);
             else
@@ -198,9 +201,11 @@
         if (!await JS.InvokeAsync<bool>("confirm", confirmMsg).ConfigureAwait(false))
             return;
 
+        await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
+
         if (_editingId is { } gid)
         {
-            var g = await Db.Groups.FirstOrDefaultAsync(x => x.Id == gid);
+            var g = await db.Groups.FirstOrDefaultAsync(x => x.Id == gid);
             if (g is null)
             {
                 _msg = "Not found.";
@@ -213,7 +218,7 @@
         }
         else
         {
-            Db.Groups.Add(new DeskGroup
+            db.Groups.Add(new DeskGroup
             {
                 Name = nameNorm,
                 Description = _desc,
@@ -221,7 +226,7 @@
             });
         }
 
-        if (!await Db.TrySaveChangesAsync(JS))
+        if (!await db.TrySaveChangesAsync(JS))
             return;
         _modalOpen = false;
         ResetEmpty();

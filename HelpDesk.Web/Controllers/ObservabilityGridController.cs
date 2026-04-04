@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 namespace HelpDesk.Web.Controllers;
 
 [ApiController]
-[Authorize]
+[Authorize(Roles = "Admin")]
 [Route("api/grid")]
 public class ObservabilityGridController : ControllerBase
 {

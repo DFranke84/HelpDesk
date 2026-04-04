@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace HelpDesk.Models;
 
@@ -10,6 +11,7 @@ public class User
     public string LoginId { get; set; } = string.Empty;
     public string? FirstName { get; set; }
     public string? LastName { get; set; }
+    [JsonIgnore]
     public string PasswordHash { get; set; } = string.Empty;
     public string? Email { get; set; }
     public UserRole Role { get; set; }

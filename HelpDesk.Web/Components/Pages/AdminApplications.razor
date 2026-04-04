@@ -12,7 +12,7 @@
 
 @using Microsoft.JSInterop
 
-@inject HelpDesk.Models.Data.HelpDeskDbContext Db
+@inject IDbContextFactory<HelpDesk.Models.Data.HelpDeskDbContext> DbFactory
 
 @inject IMenuRefreshNotifier MenuRefresh
 
@@ -242,7 +242,9 @@
 
     {
 
-        var a = await Db.Applications.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
+        await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
+
+        var a = await db.Applications.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
 
         if (a is null)
 
@@ -282,7 +284,9 @@
 
     {
 
-        var a = await Db.Applications.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
+        await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
+
+        var a = await db.Applications.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
 
         if (a is null)
 
@@ -300,15 +304,15 @@
 
             return;
 
-        var row = await Db.Applications.FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
+        var row = await db.Applications.FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
 
         if (row is null)
 
             return;
 
-        Db.Applications.Remove(row);
+        db.Applications.Remove(row);
 
-        if (!await Db.TrySaveChangesAsync(JS).ConfigureAwait(false))
+        if (!await db.TrySaveChangesAsync(JS).ConfigureAwait(false))
 
             return;
 
@@ -364,7 +368,9 @@
 
         {
 
-            var a = await Db.Applications.AsNoTracking().FirstOrDefaultAsync(x => x.Id == eid).ConfigureAwait(false);
+            await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
+
+            var a = await db.Applications.AsNoTracking().FirstOrDefaultAsync(x => x.Id == eid).ConfigureAwait(false);
 
             if (a is not null)
 
@@ -434,11 +440,13 @@
 
         }
 
+        await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
+
         if (_editingId is { } eid)
 
         {
 
-            var a = await Db.Applications.FirstOrDefaultAsync(x => x.Id == eid);
+            var a = await db.Applications.FirstOrDefaultAsync(x => x.Id == eid);
 
             if (a is null) { _msg = "Not found."; return; }
 
@@ -460,7 +468,7 @@
 
         {
 
-            Db.Applications.Add(new DeskApplication
+            db.Applications.Add(new DeskApplication
 
             {
 
@@ -480,7 +488,7 @@
 
         }
 
-        if (!await Db.TrySaveChangesAsync(JS))
+        if (!await db.TrySaveChangesAsync(JS))
 
             return;
 

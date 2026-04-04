@@ -6,7 +6,7 @@
 
 @using HelpDesk.Models.Data
 
-@inject HelpDeskDbContext Db
+@inject IDbContextFactory<HelpDeskDbContext> DbFactory
 @inject NavigationManager Nav
 @inject AuthenticationStateProvider AuthState
 @inject IMenuService MenuService
@@ -50,7 +50,8 @@ else
     {
         _navigatingAway = false;
         _accessDenied = false;
-        _page = await Db.Pages.AsNoTracking()
+        await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
+        _page = await db.Pages.AsNoTracking()
             .Where(p => p.Id == PageId && p.DeskApplicationId == AppId)
             .FirstOrDefaultAsync()
             .ConfigureAwait(false);

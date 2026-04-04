@@ -12,7 +12,7 @@
 
 @using Microsoft.AspNetCore.Components
 
-@inject HelpDesk.Models.Data.HelpDeskDbContext Db
+@inject IDbContextFactory<HelpDesk.Models.Data.HelpDeskDbContext> DbFactory
 
 @inject PasswordHasher<User> Hasher
 
@@ -162,7 +162,8 @@
     [JSInvokable]
     public async Task OpenEdit(int id)
     {
-        var u = await Db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
+        await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
+        var u = await db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
         if (u is null)
         {
             _msg = "User not found.";
@@ -197,7 +198,8 @@
             return;
         }
 
-        var u = await Db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
+        await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
+        var u = await db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
         if (u is null)
         {
             _msg = "Not found.";
@@ -208,12 +210,12 @@
         if (!await JS.InvokeAsync<bool>("confirm", $"Delete user \"{u.LoginId}\"?").ConfigureAwait(false))
             return;
 
-        var row = await Db.Users.FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
+        var row = await db.Users.FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
         if (row is null)
             return;
 
-        Db.Users.Remove(row);
-        if (!await Db.TrySaveChangesAsync(JS).ConfigureAwait(false))
+        db.Users.Remove(row);
+        if (!await db.TrySaveChangesAsync(JS).ConfigureAwait(false))
             return;
         if (_editingUserId == id)
         {
@@ -240,7 +242,8 @@
             return;
         if (_editingUserId is { } uid)
         {
-            var u = await Db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == uid).ConfigureAwait(false);
+            await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
+            var u = await db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == uid).ConfigureAwait(false);
             if (u is not null)
                 await OpenEdit(u.Id);
             else
@@ -275,9 +278,11 @@
         var fn = string.IsNullOrWhiteSpace(_firstName) ? null : _firstName.Trim();
         var ln = string.IsNullOrWhiteSpace(_lastName) ? null : _lastName.Trim();
 
+        await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
+
         if (_editingUserId is { } id)
         {
-            var u = await Db.Users.FirstOrDefaultAsync(x => x.Id == id);
+            var u = await db.Users.FirstOrDefaultAsync(x => x.Id == id);
             if (u is null)
             {
                 _msg = "Not found.";
@@ -315,10 +320,10 @@
                 CreatedAt = DateTime.UtcNow
             };
             u.PasswordHash = Hasher.HashPassword(u, _password!);
-            Db.Users.Add(u);
+            db.Users.Add(u);
         }
 
-        if (!await Db.TrySaveChangesAsync(JS))
+        if (!await db.TrySaveChangesAsync(JS))
             return;
         _modalOpen = false;
         ResetEmpty();

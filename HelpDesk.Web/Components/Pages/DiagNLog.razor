@@ -1,4 +1,5 @@
 @page "/diag/nlog"
+@attribute [Authorize(Roles = "Admin")]
 @implements IAsyncDisposable
 @inject IJSRuntime JS
 @inject NavigationManager Nav

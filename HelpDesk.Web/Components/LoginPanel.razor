@@ -129,12 +129,13 @@
 
         if (q.TryGetValue("loginError", out var err))
         {
-            _queryError = err.ToString() switch
-            {
-                "invalid" => "Invalid login ID or password.",
-                "required" => "Enter login ID and password.",
-                _ => "Sign-in was not completed."
-            };
+        _queryError = err.ToString() switch
+        {
+            "invalid" => "Invalid login ID or password.",
+            "required" => "Enter login ID and password.",
+            "locked" => "Too many failed attempts. Please wait a few minutes and try again.",
+            _ => "Sign-in was not completed."
+        };
         }
         else
             _queryError = null;

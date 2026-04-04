@@ -35,6 +35,7 @@ builder.Services.AddScoped<IStatusBarService, StatusBarService>();
 builder.Services.AddScoped<PasswordResetService>();
 builder.Services.AddScoped<EmailSender>();
 builder.Services.AddSingleton<PasswordHasher<User>>();
+builder.Services.AddSingleton<LoginRateLimiter>();
 
 var helpDeskCs = builder.Configuration.GetConnectionString("HelpDesk");
 // Scoped factory so DbContext construction can use scoped deps (e.g. ICurrentUserContext). Singleton factory resolves from root and cannot inject scoped services.

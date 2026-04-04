@@ -89,21 +89,29 @@ public sealed class AdminCatalogGridController : ControllerBase
     [HttpGet("user-groups")]
     public async Task<IActionResult> UserGroups(CancellationToken ct)
     {
-        var list = await _db.UserGroups.AsNoTracking()
-            .Include(ug => ug.User)
-            .Include(ug => ug.Group)
+        var projected = await _db.UserGroups.AsNoTracking()
             .OrderByDescending(ug => ug.AssignedAt)
             .Take(500)
+            .Select(ug => new
+            {
+                ug.UserId,
+                ug.GroupId,
+                loginId = ug.User!.LoginId,
+                firstName = ug.User!.FirstName,
+                lastName = ug.User!.LastName,
+                groupName = ug.Group!.Name,
+                ug.AssignedAt
+            })
             .ToListAsync(ct)
             .ConfigureAwait(false);
 
-        var rows = list.Select(ug => new
+        var rows = projected.Select(ug => new
         {
             ug.UserId,
             ug.GroupId,
-            loginId = ug.User!.LoginId,
-            displayName = UserDisplayName.Format(ug.User!),
-            groupName = ug.Group!.Name,
+            ug.loginId,
+            displayName = UserDisplayName.Format(ug.firstName, ug.lastName, ug.loginId),
+            ug.groupName,
             assignedAt = ug.AssignedAt.ToString("u")
         });
         return Ok(rows);
@@ -112,15 +120,25 @@ public sealed class AdminCatalogGridController : ControllerBase
     [HttpGet("users")]
     public async Task<IActionResult> Users(CancellationToken ct)
     {
-        var list = await _db.Users.AsNoTracking()
+        var projected = await _db.Users.AsNoTracking()
             .OrderBy(u => u.LoginId)
+            .Select(u => new
+            {
+                u.Id,
+                u.FirstName,
+                u.LastName,
+                u.LoginId,
+                u.Email,
+                u.Role,
+                u.IsActive
+            })
             .ToListAsync(ct)
             .ConfigureAwait(false);
 
-        var rows = list.Select(u => new
+        var rows = projected.Select(u => new
         {
             u.Id,
-            name = UserDisplayName.Format(u),
+            name = UserDisplayName.Format(u.FirstName, u.LastName, u.LoginId),
             u.LoginId,
             u.Email,
             role = u.Role.ToString(),
