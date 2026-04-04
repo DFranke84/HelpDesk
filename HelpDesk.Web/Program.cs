@@ -27,7 +27,6 @@ if (builder.Environment.IsDevelopment())
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUserContext, HttpCurrentUserContext>();
 builder.Services.AddScoped<ICorrelationContext, CorrelationContext>();
-builder.Services.AddScoped<ILoggerService, WebLoggerService>();
 builder.Services.AddScoped<EventLogManager>();
 builder.Services.AddScoped<IMenuService, MenuService>();
 builder.Services.AddSingleton<IMenuRefreshNotifier, MenuRefreshNotifier>();

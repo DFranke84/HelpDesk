@@ -32,13 +32,13 @@ public sealed class WindowsAutoLoginMiddleware
     /// </summary>
     /// <param name="context">Current HTTP context <see cref="HttpContext"/>.</param>
     /// <param name="db">Help Desk database <see cref="HelpDeskDbContext"/>.</param>
-    /// <param name="loggerService">Logger sink <see cref="ILoggerService"/>.</param>
+    /// <param name="log">Event log manager <see cref="EventLogManager"/>.</param>
     /// <param name="configuration">Application configuration <see cref="IConfiguration"/>.</param>
     /// <returns>A task that completes when the pipeline finishes.</returns>
     public async Task InvokeAsync(
         HttpContext context,
         HelpDeskDbContext db,
-        ILoggerService loggerService,
+        EventLogManager log,
         IConfiguration configuration)
     {
         if (context.User.Identity?.AuthenticationType == CookieAuthenticationDefaults.AuthenticationScheme
@@ -103,7 +103,8 @@ public sealed class WindowsAutoLoginMiddleware
             }).ConfigureAwait(false);
 
         using (ScopeContext.PushProperty("domainLogin", winName))
-            await loggerService.AddAuditAsync("Login", user.LoginId, "Windows integrated login", winName, context.RequestAborted).ConfigureAwait(false);
+        using (log.BeginContext(loginId: user.LoginId, activityCategory: "Login"))
+            log.LogInformation("{ActionType} {Message} {Details}", "Login", "Windows integrated login", winName);
 
         var redirect = context.Request.PathBase + context.Request.Path + context.Request.QueryString;
         context.Response.Redirect(redirect);

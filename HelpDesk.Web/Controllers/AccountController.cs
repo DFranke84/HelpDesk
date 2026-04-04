@@ -57,7 +57,7 @@ internal sealed class SkipFetchHeaderCheckAttribute : Attribute { }
 public class AccountController : ControllerBase
 {
     private readonly HelpDeskDbContext _db;
-    private readonly ILoggerService _loggerService;
+    private readonly EventLogManager _log;
     private readonly PasswordHasher<User> _hasher;
     private readonly PasswordResetService _passwordReset;
     private readonly IEmailSender _email;
@@ -68,7 +68,7 @@ public class AccountController : ControllerBase
     /// Create account controller with auth and email dependencies.
     /// </summary>
     /// <param name="db">Help Desk database <see cref="HelpDeskDbContext"/>.</param>
-    /// <param name="loggerService">Logger sink <see cref="ILoggerService"/>.</param>
+    /// <param name="log">Event log manager <see cref="EventLogManager"/>.</param>
     /// <param name="hasher">Password hasher <see cref="PasswordHasher{User}"/>.</param>
     /// <param name="passwordReset">Reset token service <see cref="PasswordResetService"/>.</param>
     /// <param name="email">Transactional email <see cref="IEmailSender"/>.</param>
@@ -76,7 +76,7 @@ public class AccountController : ControllerBase
     /// <param name="rateLimiter">Login rate limiter <see cref="LoginRateLimiter"/>.</param>
     public AccountController(
         HelpDeskDbContext db,
-        ILoggerService loggerService,
+        EventLogManager log,
         PasswordHasher<User> hasher,
         PasswordResetService passwordReset,
         IEmailSender email,
@@ -84,7 +84,7 @@ public class AccountController : ControllerBase
         LoginRateLimiter rateLimiter)
     {
         _db = db;
-        _loggerService = loggerService;
+        _log = log;
         _hasher = hasher;
         _passwordReset = passwordReset;
         _email = email;
@@ -150,7 +150,8 @@ public class AccountController : ControllerBase
                 AllowRefresh = true
             }).ConfigureAwait(false);
 
-        await _loggerService.AddAuditAsync("Login", user.LoginId, "Forms login", loginId, ct).ConfigureAwait(false);
+        using (_log.BeginContext(loginId: user.LoginId, activityCategory: "Login"))
+            _log.LogInformation("{ActionType} {Message} {Details}", "Login", "Forms login", loginId);
 
         ClearSuppressWindowsAutoLoginCookie();
 
@@ -221,7 +222,8 @@ public class AccountController : ControllerBase
                 AllowRefresh = true
             }).ConfigureAwait(false);
 
-        await _loggerService.AddAuditAsync("Login", user.LoginId, "Forms login", normalized, ct).ConfigureAwait(false);
+        using (_log.BeginContext(loginId: user.LoginId, activityCategory: "Login"))
+            _log.LogInformation("{ActionType} {Message} {Details}", "Login", "Forms login", normalized);
 
         ClearSuppressWindowsAutoLoginCookie();
 
@@ -281,7 +283,8 @@ public class AccountController : ControllerBase
                 AllowRefresh = true
             }).ConfigureAwait(false);
 
-        await _loggerService.AddAuditAsync("PasswordChange", user.LoginId, "User changed password", null, ct).ConfigureAwait(false);
+        using (_log.BeginContext(loginId: user.LoginId, activityCategory: "ChangePassword"))
+            _log.LogInformation("{ActionType} {Message}", "PasswordChange", "User changed password");
 
         return Ok(new { ok = true });
     }
@@ -313,11 +316,13 @@ public class AccountController : ControllerBase
         if (!string.IsNullOrWhiteSpace(windowsName))
         {
             using (ScopeContext.PushProperty("domainLogin", windowsName))
-                await _loggerService.AddAuditAsync("Logoff", auditLoginId, "User logged out", windowsName, ct).ConfigureAwait(false);
+            using (_log.BeginContext(loginId: auditLoginId, activityCategory: "Logoff"))
+                _log.LogInformation("{ActionType} {Message} {Details}", "Logoff", "User logged out", windowsName);
         }
         else
         {
-            await _loggerService.AddAuditAsync("Logoff", auditLoginId, "User logged out", null, ct).ConfigureAwait(false);
+            using (_log.BeginContext(loginId: auditLoginId, activityCategory: "Logoff"))
+                _log.LogInformation("{ActionType} {Message}", "Logoff", "User logged out");
         }
         await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme).ConfigureAwait(false);
 
