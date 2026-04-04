@@ -222,6 +222,7 @@ public class HelpDeskDbContext : DbContext
             e.Property(x => x.Email).HasMaxLength(256);
             e.Property(x => x.DomainSamAccountName).HasMaxLength(256);
             e.Property(x => x.DomainUserPrincipalName).HasMaxLength(256);
+            e.Property(x => x.RowVersion).IsRowVersion();
         });
 
         modelBuilder.Entity<DeskApplication>(e =>
@@ -230,6 +231,7 @@ public class HelpDeskDbContext : DbContext
             e.HasIndex(x => x.Name);
             e.Property(x => x.Name).HasMaxLength(200);
             e.Property(x => x.ExternalConnectionStringName).HasMaxLength(200);
+            e.Property(x => x.RowVersion).IsRowVersion();
         });
 
         modelBuilder.Entity<DeskPage>(e =>
@@ -237,6 +239,7 @@ public class HelpDeskDbContext : DbContext
             e.ToTable("Pages");
             e.Property(x => x.Name).HasMaxLength(200);
             e.Property(x => x.Route).HasMaxLength(500);
+            e.Property(x => x.RowVersion).IsRowVersion();
             e.HasOne(x => x.DeskApplication)
                 .WithMany()
                 .HasForeignKey(x => x.DeskApplicationId)
@@ -247,6 +250,7 @@ public class HelpDeskDbContext : DbContext
         {
             e.ToTable("Groups");
             e.Property(x => x.Name).HasMaxLength(200);
+            e.Property(x => x.RowVersion).IsRowVersion();
         });
 
         // SQL Server: two CASCADE FKs on a junction table + UserGroups->Groups CASCADE causes
@@ -312,6 +316,8 @@ public class HelpDeskDbContext : DbContext
         {
             e.ToTable("PasswordResetTokens");
             e.HasIndex(x => x.UserId);
+            e.HasIndex(x => x.TokenHash);
+            e.Property(x => x.TokenHash).HasMaxLength(128);
             e.HasOne(x => x.User)
                 .WithMany()
                 .HasForeignKey(x => x.UserId)

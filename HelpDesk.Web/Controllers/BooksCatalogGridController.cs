@@ -20,22 +20,21 @@ public sealed class BooksCatalogGridController : ControllerBase
     [HttpGet("catalog")]
     public async Task<IActionResult> Catalog(CancellationToken ct)
     {
-        var list = await _db.Books.AsNoTracking()
-            .Include(b => b.Publisher)
+        var rows = await _db.Books.AsNoTracking()
             .OrderBy(b => b.Title)
+            .Select(b => new
+            {
+                id = b.BookId,
+                isbn13 = b.Isbn13.Trim(),
+                title = b.Title,
+                publisher = b.Publisher != null ? b.Publisher.Name : "",
+                year = b.PublicationYear,
+                pages = b.Pages,
+                lang = b.LanguageCode.Trim()
+            })
             .ToListAsync(ct)
             .ConfigureAwait(false);
 
-        var rows = list.Select(b => new
-        {
-            id = b.BookId,
-            isbn13 = b.Isbn13.Trim(),
-            title = b.Title,
-            publisher = b.Publisher != null ? b.Publisher.Name : "",
-            year = b.PublicationYear,
-            pages = b.Pages,
-            lang = b.LanguageCode.Trim()
-        });
         return Ok(rows);
     }
 }

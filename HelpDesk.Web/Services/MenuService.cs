@@ -83,14 +83,12 @@ public class MenuService : IMenuService
             return true;
 
         await using var db = await _factory.CreateDbContextAsync(ct).ConfigureAwait(false);
-        var candidates = await db.Pages.AsNoTracking()
-            .Where(p => p.IsActive && p.Route != null && p.Route != "")
-            .Select(p => new { p.Id, p.DeskApplicationId, p.Route })
-            .ToListAsync(ct)
+        var page = await db.Pages.AsNoTracking()
+            .Where(p => p.IsActive && p.Route == normalized)
+            .Select(p => new { p.Id, p.DeskApplicationId })
+            .FirstOrDefaultAsync(ct)
             .ConfigureAwait(false);
 
-        var page = candidates.FirstOrDefault(p =>
-            string.Equals(p.Route.Trim(), normalized, StringComparison.Ordinal));
         if (page is null)
             return true;
 

@@ -1,7 +1,7 @@
 window.helpdeskDiag = {
   __pending: {},
 
-  /// Remove DataTables UI for a table id (call when leaving a Blazor page to avoid orphan wrappers).
+  /** Remove DataTables UI for a table id (call when leaving a Blazor page to avoid orphan wrappers). */
   destroyFull: function (tableId) {
     var $ = window.jQuery;
     if (!$ || !$.fn.DataTable) return;

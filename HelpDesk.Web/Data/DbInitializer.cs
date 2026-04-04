@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace HelpDesk.Web.Data;
 
@@ -21,33 +22,43 @@ public static class DbInitializer
         var db = scope.ServiceProvider.GetRequiredService<HelpDeskDbContext>();
         var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
         var hasher = scope.ServiceProvider.GetRequiredService<PasswordHasher<User>>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>()
+            .CreateLogger(typeof(DbInitializer).FullName!);
 
-        await db.Database.MigrateAsync(ct).ConfigureAwait(false);
-
-        await EnsureBooksCatalogAsync(db, ct).ConfigureAwait(false);
-
-        if (await db.Users.AnyAsync(ct).ConfigureAwait(false))
-            return;
-
-        var rawLogin = config["App:InitialAdminLoginId"] ?? config["App:InitialAdminUserName"] ?? "ADMIN";
-        var loginId = AdminNameValidation.ToUpperNoSpaces(rawLogin);
-        var password = config["App:InitialAdminPassword"] ?? "ChangeMe!123";
-        var email = string.IsNullOrWhiteSpace(config["App:InitialAdminEmail"])
-            ? "admin@localhost"
-            : config["App:InitialAdminEmail"]!.Trim();
-
-        var admin = new User
+        try
         {
-            LoginId = loginId,
-            Email = email,
-            Role = UserRole.Admin,
-            IsActive = true,
-            MustChangePassword = true,
-            CreatedAt = DateTime.UtcNow
-        };
-        admin.PasswordHash = hasher.HashPassword(admin, password);
-        db.Users.Add(admin);
-        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            await db.Database.MigrateAsync(ct).ConfigureAwait(false);
+
+            await EnsureBooksCatalogAsync(db, ct).ConfigureAwait(false);
+
+            if (await db.Users.AnyAsync(ct).ConfigureAwait(false))
+                return;
+
+            var rawLogin = config["App:InitialAdminLoginId"] ?? config["App:InitialAdminUserName"] ?? "ADMIN";
+            var loginId = AdminNameValidation.ToUpperNoSpaces(rawLogin);
+            var password = config["App:InitialAdminPassword"] ?? "ChangeMe!123";
+            var email = string.IsNullOrWhiteSpace(config["App:InitialAdminEmail"])
+                ? "admin@localhost"
+                : config["App:InitialAdminEmail"]!.Trim();
+
+            var admin = new User
+            {
+                LoginId = loginId,
+                Email = email,
+                Role = UserRole.Admin,
+                IsActive = true,
+                MustChangePassword = true,
+                CreatedAt = DateTime.UtcNow
+            };
+            admin.PasswordHash = hasher.HashPassword(admin, password);
+            db.Users.Add(admin);
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            logger.LogCritical(ex, "Database initialization failed");
+            throw;
+        }
     }
 
     /// <summary>

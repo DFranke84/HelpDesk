@@ -18,7 +18,8 @@ public class EmailSender
     public async Task SendAsync(string to, string subject, string body, CancellationToken ct = default)
     {
         var host = _configuration["Smtp:Host"];
-        var port = int.Parse(_configuration["Smtp:Port"] ?? "25");
+        if (!int.TryParse(_configuration["Smtp:Port"], out var port))
+            port = 25;
         var from = _configuration["Smtp:From"];
         if (string.IsNullOrWhiteSpace(host) || string.IsNullOrWhiteSpace(from))
         {
@@ -26,23 +27,30 @@ public class EmailSender
             return;
         }
 
-        var message = new MimeMessage();
-        message.From.Add(MailboxAddress.Parse(from));
-        message.To.Add(MailboxAddress.Parse(to));
-        message.Subject = subject;
-        message.Body = new TextPart("plain") { Text = body };
+        try
+        {
+            var message = new MimeMessage();
+            message.From.Add(MailboxAddress.Parse(from));
+            message.To.Add(MailboxAddress.Parse(to));
+            message.Subject = subject;
+            message.Body = new TextPart("plain") { Text = body };
 
-        using var client = new SmtpClient();
-        var socketOptions = ResolveSecureSocketOptions();
-        await client.ConnectAsync(host, port, socketOptions, ct).ConfigureAwait(false);
-        // If credentials are required, configure UserSecrets: Smtp:User and Smtp:Password
-        var smtpUser = _configuration["Smtp:User"];
-        var smtpPass = _configuration["Smtp:Password"];
-        if (!string.IsNullOrEmpty(smtpUser))
-            await client.AuthenticateAsync(smtpUser, smtpPass ?? "", ct).ConfigureAwait(false);
+            using var client = new SmtpClient();
+            var socketOptions = ResolveSecureSocketOptions();
+            await client.ConnectAsync(host, port, socketOptions, ct).ConfigureAwait(false);
+            var smtpUser = _configuration["Smtp:User"];
+            var smtpPass = _configuration["Smtp:Password"];
+            if (!string.IsNullOrEmpty(smtpUser))
+                await client.AuthenticateAsync(smtpUser, smtpPass ?? "", ct).ConfigureAwait(false);
 
-        await client.SendAsync(message, ct).ConfigureAwait(false);
-        await client.DisconnectAsync(true, ct).ConfigureAwait(false);
+            await client.SendAsync(message, ct).ConfigureAwait(false);
+            await client.DisconnectAsync(true, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogError(ex, "Failed to send email to {To}, Subject: {Subject}", to, subject);
+            throw;
+        }
     }
 
     private SecureSocketOptions ResolveSecureSocketOptions()

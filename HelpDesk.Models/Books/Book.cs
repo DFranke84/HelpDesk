@@ -1,10 +1,8 @@
 using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
 
 namespace HelpDesk.Models.Books;
 
 /// <summary>Row in Books.dbo.Books (library titles).</summary>
-[Table("Books")]
 public sealed class Book
 {
     public int BookId { get; set; }

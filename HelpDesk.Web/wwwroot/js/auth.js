@@ -21,32 +21,36 @@ window.helpdeskUi = {
     }
   },
   focusById: function (id) {
-    const tryFocus = function () {
-      const el = document.getElementById(id);
-      if (el) {
-        el.focus();
-        return true;
+    return new Promise(function (resolve) {
+      var attempts = 0;
+      function tryFocus() {
+        var el = document.getElementById(id);
+        if (el) { el.focus(); resolve(); return; }
+        attempts++;
+        if (attempts < 5) { setTimeout(tryFocus, 50); }
+        else { resolve(); }
       }
-      return false;
-    };
-    setTimeout(function () { tryFocus(); }, 0);
-    setTimeout(function () { tryFocus(); }, 50);
-    setTimeout(function () { tryFocus(); }, 150);
+      setTimeout(tryFocus, 0);
+    });
   }
 };
 
 window.helpdeskAuth = {
   postJson: async function (url, body) {
-    const r = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify(body)
-    });
-    const text = await r.text();
-    let data = null;
-    try { data = text ? JSON.parse(text) : null; } catch (e) { /* ignore */ }
-    return { ok: r.ok, status: r.status, data: data };
+    try {
+      var r = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(body)
+      });
+      var text = await r.text();
+      var data = null;
+      try { data = text ? JSON.parse(text) : null; } catch (e) { /* non-JSON response */ }
+      return { ok: r.ok, status: r.status, data: data };
+    } catch (e) {
+      return { ok: false, status: 0, data: null };
+    }
   },
   postLogout: async function (url) {
     const r = await fetch(url, {

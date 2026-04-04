@@ -15,12 +15,14 @@ public sealed class WebObservabilityService : IObservabilityService
     private readonly ICorrelationContext _correlation;
     private readonly EventLogManager _log;
     private readonly HelpDeskDbContext _db;
+    private readonly ILogger<WebObservabilityService> _logger;
 
-    public WebObservabilityService(ICorrelationContext correlation, EventLogManager log, HelpDeskDbContext db)
+    public WebObservabilityService(ICorrelationContext correlation, EventLogManager log, HelpDeskDbContext db, ILogger<WebObservabilityService> logger)
     {
         _correlation = correlation;
         _log = log;
         _db = db;
+        _logger = logger;
     }
 
     public Guid? CorrelationId => _correlation.Id;
@@ -94,9 +96,9 @@ public sealed class WebObservabilityService : IObservabilityService
             });
             await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
-        catch
+        catch (Exception ex)
         {
-            // Never block auth or requests if the log table insert fails.
+            _logger.LogDebug(ex, "NLog table insert failed (non-blocking)");
         }
     }
 }

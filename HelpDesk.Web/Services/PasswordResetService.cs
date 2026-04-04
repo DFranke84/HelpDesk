@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using HelpDesk.Models;
@@ -49,14 +50,17 @@ public class PasswordResetService
         if (user is null)
             return null;
 
+        await InvalidateExistingTokensAsync(user.Id, ct).ConfigureAwait(false);
+
         var raw = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
         var hash = Sha256(raw);
 
+        var hours = double.Parse(_configuration["App:PasswordResetTokenHours"] ?? "24", CultureInfo.InvariantCulture);
         _db.PasswordResetTokens.Add(new PasswordResetToken
         {
             UserId = user.Id,
             TokenHash = hash,
-            ExpiresAt = DateTime.UtcNow.AddHours(double.Parse(_configuration["App:PasswordResetTokenHours"] ?? "24")),
+            ExpiresAt = DateTime.UtcNow.AddHours(hours),
             CreatedAt = DateTime.UtcNow
         });
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
@@ -75,6 +79,8 @@ public class PasswordResetService
         var user = await _db.Users.FirstOrDefaultAsync(u => u.LoginId == normalized && u.IsActive, ct).ConfigureAwait(false);
         if (user is null || string.IsNullOrWhiteSpace(user.Email))
             return null;
+
+        await InvalidateExistingTokensAsync(user.Id, ct).ConfigureAwait(false);
 
         var raw = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
         var hash = Sha256(raw);
@@ -113,6 +119,17 @@ public class PasswordResetService
         token.UsedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
         return (true, null);
+    }
+
+    private async Task InvalidateExistingTokensAsync(int userId, CancellationToken ct)
+    {
+        var existing = await _db.PasswordResetTokens
+            .Where(t => t.UserId == userId && t.UsedAt == null && t.ExpiresAt > DateTime.UtcNow)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+        foreach (var t in existing)
+            t.UsedAt = DateTime.UtcNow;
     }
 
     private static string Sha256(string value)

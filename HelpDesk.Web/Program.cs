@@ -61,8 +61,8 @@ builder.Services.AddAuthentication(options =>
     })
     .AddCookie(options =>
     {
-        // Use a stable, app-specific cookie name so we can reliably delete it on logout/idle-timeout.
         options.Cookie.Name = AuthCookieNames.Auth;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
         options.ExpireTimeSpan = TimeSpan.FromMinutes(60);
         options.SlidingExpiration = true;
         options.LoginPath = "/login";

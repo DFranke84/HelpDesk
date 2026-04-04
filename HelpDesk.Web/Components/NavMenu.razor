@@ -103,7 +103,7 @@ else
 
                             var open = _open.Contains(app.Id);
 
-                            <div class="hd-app-node">
+                            <div class="hd-app-node" @key="app.Id">
 
                                 <button type="button" class="hd-app-toggle" @onclick="() => ToggleApp(app.Id)">
 
@@ -206,66 +206,24 @@ else
 
 
 
-    private async void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e) =>
+        _ = RefreshMenuCoreAsync();
 
+    private void OnMenuChanged() =>
+        _ = RefreshMenuCoreAsync();
+
+    private async Task RefreshMenuCoreAsync()
     {
-
         try
-
         {
-
             await InvokeAsync(async () =>
-
             {
-
                 await LoadMenuAsync();
-
                 StateHasChanged();
-
             });
-
         }
-
-        catch
-
-        {
-
-            // Circuit may be disposed
-
-        }
-
-    }
-
-
-
-    private async void OnMenuChanged()
-
-    {
-
-        try
-
-        {
-
-            await InvokeAsync(async () =>
-
-            {
-
-                await LoadMenuAsync();
-
-                StateHasChanged();
-
-            });
-
-        }
-
-        catch
-
-        {
-
-            // Circuit may be disposed
-
-        }
-
+        catch (ObjectDisposedException) { }
+        catch (InvalidOperationException) { }
     }
 
 
