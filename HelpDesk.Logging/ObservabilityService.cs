@@ -2,7 +2,8 @@ using NLog;
 
 namespace HelpDesk.Logging;
 
-public class ObservabilityService : IObservabilityService
+/// <summary>Base observability implementation that writes audit, error, and log entries to the NLog file logger only (no database).</summary>
+public sealed class ObservabilityService : IObservabilityService
 {
     private readonly ICorrelationContext _correlation;
     private readonly EventLogManager _log;

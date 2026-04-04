@@ -33,11 +33,12 @@ builder.Services.AddScoped<IMenuService, MenuService>();
 builder.Services.AddSingleton<IMenuRefreshNotifier, MenuRefreshNotifier>();
 builder.Services.AddScoped<IStatusBarService, StatusBarService>();
 builder.Services.AddScoped<PasswordResetService>();
-builder.Services.AddScoped<EmailSender>();
+builder.Services.AddScoped<IEmailSender, EmailSender>();
 builder.Services.AddSingleton<PasswordHasher<User>>();
 builder.Services.AddSingleton<LoginRateLimiter>();
 
-var helpDeskCs = builder.Configuration.GetConnectionString("HelpDesk");
+var helpDeskCs = builder.Configuration.GetConnectionString("HelpDesk")
+    ?? throw new InvalidOperationException("Connection string 'HelpDesk' is not configured.");
 // Scoped factory so DbContext construction can use scoped deps (e.g. ICurrentUserContext). Singleton factory resolves from root and cannot inject scoped services.
 // Do not also call AddDbContext for the same type — duplicate registration of options/factory for one context type causes DI issues.
 builder.Services.AddDbContextFactory<HelpDeskDbContext>((sp, options) =>
@@ -45,7 +46,8 @@ builder.Services.AddDbContextFactory<HelpDeskDbContext>((sp, options) =>
     options.UseSqlServer(helpDeskCs);
 }, ServiceLifetime.Scoped);
 
-var booksCs = builder.Configuration.GetConnectionString("Books");
+var booksCs = builder.Configuration.GetConnectionString("Books")
+    ?? throw new InvalidOperationException("Connection string 'Books' is not configured.");
 builder.Services.AddDbContextFactory<BooksDbContext>((sp, options) =>
 {
     options.UseSqlServer(booksCs);

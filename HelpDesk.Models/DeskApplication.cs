@@ -2,7 +2,8 @@ using System.ComponentModel.DataAnnotations;
 
 namespace HelpDesk.Models;
 
-public class DeskApplication
+/// <summary>A registered application in the help desk catalog, optionally backed by an external database.</summary>
+public sealed class DeskApplication
 {
     public int Id { get; set; }
 

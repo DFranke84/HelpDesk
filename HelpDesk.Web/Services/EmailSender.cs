@@ -4,7 +4,8 @@ using MimeKit;
 
 namespace HelpDesk.Web.Services;
 
-public class EmailSender
+/// <summary>Sends transactional emails via SMTP using MailKit, configured through <c>Smtp:*</c> settings.</summary>
+public sealed class EmailSender : IEmailSender
 {
     private readonly IConfiguration _configuration;
     private readonly ILogger<EmailSender> _logger;

@@ -76,6 +76,45 @@ public class MenuService : IMenuService
             .ConfigureAwait(false);
     }
 
+    public async Task<Dictionary<int, List<DeskPage>>> GetAccessiblePagesByAppsAsync(IEnumerable<int> appIds, int userId, bool isAdmin, CancellationToken ct = default)
+    {
+        await using var db = await _factory.CreateDbContextAsync(ct).ConfigureAwait(false);
+        var ids = appIds.ToList();
+
+        IQueryable<DeskPage> query;
+        if (isAdmin)
+        {
+            query = db.Pages.AsNoTracking()
+                .Where(p => ids.Contains(p.DeskApplicationId) && p.IsActive);
+        }
+        else
+        {
+            var groupIds = await db.UserGroups.AsNoTracking()
+                .Where(ug => ug.UserId == userId)
+                .Select(ug => ug.GroupId)
+                .ToListAsync(ct)
+                .ConfigureAwait(false);
+
+            var accessibleAppIds = await db.DeskApplicationGroups.AsNoTracking()
+                .Where(ag => ids.Contains(ag.DeskApplicationId) && groupIds.Contains(ag.DeskGroupId))
+                .Select(ag => ag.DeskApplicationId)
+                .Distinct()
+                .ToListAsync(ct)
+                .ConfigureAwait(false);
+
+            query = db.Pages.AsNoTracking()
+                .Where(p => accessibleAppIds.Contains(p.DeskApplicationId) && p.IsActive);
+        }
+
+        var pages = await query
+            .OrderBy(p => p.DisplayOrder).ThenBy(p => p.Name)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+        return pages.GroupBy(p => p.DeskApplicationId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+    }
+
     public async Task<bool> CanAccessCatalogRoutePathAsync(string path, int userId, bool isAdmin, CancellationToken ct = default)
     {
         var normalized = NormalizeCatalogPath(path);

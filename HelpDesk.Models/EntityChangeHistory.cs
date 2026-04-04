@@ -1,6 +1,6 @@
 namespace HelpDesk.Models;
 
-public class EntityChangeHistory
+public sealed class EntityChangeHistory
 {
     public long Id { get; set; }
     public string EntityType { get; set; } = string.Empty;

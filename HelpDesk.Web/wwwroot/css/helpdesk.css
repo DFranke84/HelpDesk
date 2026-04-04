@@ -1,3 +1,5 @@
+/* ========== DESIGN TOKENS ========== */
+
 :root {
   --hd-bg: #0f1419;
   --hd-surface: #1a2332;
@@ -10,6 +12,8 @@
   --hd-radius: 10px;
   --hd-font: "Segoe UI", system-ui, sans-serif;
 }
+
+/* ========== BASE / RESET ========== */
 
 html, body {
   margin: 0;
@@ -46,6 +50,8 @@ a:hover {
 .muted {
   color: var(--hd-muted);
 }
+
+/* ========== TABLES ========== */
 
 /* Plain HTML tables — do NOT use DataTables' "display" class here (global DT CSS/JS targets it). */
 .hd-table {
@@ -84,6 +90,8 @@ a:hover {
 .hd-dt {
   width: 100%;
 }
+
+/* ========== SHELL LAYOUT ========== */
 
 .hd-shell {
   display: flex;
@@ -162,34 +170,6 @@ a:hover {
   padding: 0.25rem 0;
 }
 
-.hd-dropdown {
-  position: relative;
-}
-
-.hd-dropdown > summary,
-.hd-dropdown > .hd-btn {
-  list-style: none;
-  cursor: pointer;
-}
-
-.hd-dropdown summary::-webkit-details-marker {
-  display: none;
-}
-
-.hd-dropdown-content {
-  position: absolute;
-  right: 0;
-  margin-top: 0.35rem;
-  min-width: 200px;
-  background: var(--hd-surface);
-  border: 1px solid var(--hd-border);
-  border-radius: var(--hd-radius);
-  padding: 0.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  z-index: 20;
-}
 
 .hd-body {
   display: flex;
@@ -266,6 +246,8 @@ a:hover {
   font-variant-numeric: tabular-nums;
   color: var(--hd-muted);
 }
+
+/* ========== NAVIGATION ========== */
 
 .hd-nav-link {
   display: block;
@@ -353,6 +335,8 @@ a:hover {
   padding: 0.25rem 0.5rem;
   cursor: pointer;
 }
+
+/* ========== AUTH / LOGIN ========== */
 
 .hd-login-shell,
 .hd-login-layout {
@@ -478,6 +462,8 @@ a:hover {
   mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M13.359 11.238C15.06 9.72 16 8 16 8s-3-5.5-8-5.5a7 7 0 0 0-2.79.588l.77.771A5.944 5.944 0 0 1 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.134 13.134 0 0 1 14.828 8a14 14 0 0 1-.195.288 12.2 12.2 0 0 1-1.465 1.755c-.165.165-.337.328-.517.486l.708.709z'/%3E%3Cpath d='M11.297 9.176a3.5 3.5 0 0 0-4.474-4.474l.823.823a2.5 2.5 0 0 1 2.9 2.9l.751.751z'/%3E%3Cpath d='M3.036 7.07A13.2 13.2 0 0 0 1.172 8a12.7 12.7 0 0 0 1.658 2.043C4.121 11.332 5.88 12.5 8 12.5c.716 0 1.39-.133 2.02-.36l.77.772A7 7 0 0 1 8 13.5C3 13.5 0 8 0 8s1.065-1.91 2.513-3.453l.523.523z'/%3E%3Cpath d='M13.646 14.354l-12-12 .708-.708 12 12-.708.708z'/%3E%3C/svg%3E");
 }
 
+/* ========== BUTTONS ========== */
+
 .hd-btn {
   padding: 0.45rem 0.85rem;
   border-radius: 8px;
@@ -510,6 +496,8 @@ a:hover {
 .hd-btn.danger:hover {
   background: rgba(220, 80, 80, 0.32);
 }
+
+/* ========== ADMIN PAGES ========== */
 
 .hd-admin-toolbar {
   display: flex;
@@ -643,6 +631,8 @@ a:hover {
   overflow: auto;
 }
 
+/* ========== DATATABLES OVERRIDES ========== */
+
 .dataTables_wrapper {
   color: var(--hd-text);
 }
@@ -677,6 +667,8 @@ main .hd-dt {
 table.dataTable tbody tr {
   background: var(--hd-surface) !important;
 }
+
+/* ========== MODALS ========== */
 
 /* Outer wrapper: no background click target — avoids closing when text selection ends on the dimmed area. */
 .hd-modal-backdrop {

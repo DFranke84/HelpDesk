@@ -2,7 +2,8 @@ using System.ComponentModel.DataAnnotations;
 
 namespace HelpDesk.Models;
 
-public class DeskGroup
+/// <summary>Security group that links users to one or more applications.</summary>
+public sealed class DeskGroup
 {
     public int Id { get; set; }
 

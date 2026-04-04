@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace HelpDesk.Models.Data;
 
-public class HelpDeskDbContext : DbContext
+public sealed class HelpDeskDbContext : DbContext
 {
     private readonly ICurrentUserContext? _currentUser;
 
@@ -202,7 +202,7 @@ public class HelpDeskDbContext : DbContext
                 return null;
             return JsonSerializer.Serialize(changes);
         }
-        catch
+        catch (JsonException)
         {
             return "{}";
         }

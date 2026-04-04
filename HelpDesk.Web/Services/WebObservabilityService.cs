@@ -14,14 +14,15 @@ public sealed class WebObservabilityService : IObservabilityService
 {
     private readonly ICorrelationContext _correlation;
     private readonly EventLogManager _log;
-    private readonly HelpDeskDbContext _db;
+    private readonly IDbContextFactory<HelpDeskDbContext> _dbFactory;
     private readonly ILogger<WebObservabilityService> _logger;
 
-    public WebObservabilityService(ICorrelationContext correlation, EventLogManager log, HelpDeskDbContext db, ILogger<WebObservabilityService> logger)
+    public WebObservabilityService(ICorrelationContext correlation, EventLogManager log,
+        IDbContextFactory<HelpDeskDbContext> dbFactory, ILogger<WebObservabilityService> logger)
     {
         _correlation = correlation;
         _log = log;
-        _db = db;
+        _dbFactory = dbFactory;
         _logger = logger;
     }
 
@@ -77,11 +78,13 @@ public sealed class WebObservabilityService : IObservabilityService
     {
         try
         {
+            await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+
             string? domainLogin = null;
             if (ScopeContext.TryGetProperty("domainLogin", out var d) && d is not null)
                 domainLogin = d.ToString();
 
-            _db.NLogEntries.Add(new NLogEntry
+            db.NLogEntries.Add(new NLogEntry
             {
                 MachineName = Environment.MachineName,
                 Logged = DateTime.UtcNow,
@@ -94,7 +97,7 @@ public sealed class WebObservabilityService : IObservabilityService
                 LoginId = loginId,
                 DomainLogin = domainLogin
             });
-            await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
         {

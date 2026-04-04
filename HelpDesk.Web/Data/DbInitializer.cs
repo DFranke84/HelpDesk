@@ -137,6 +137,8 @@ public static class DbInitializer
             }
         }
 
+        var needsSave = false;
+
         var link = await db.DeskApplicationGroups.AsQueryable()
             .FirstOrDefaultAsync(ag => ag.DeskApplicationId == app.Id && ag.DeskGroupId == group.Id, ct)
             .ConfigureAwait(false);
@@ -147,7 +149,7 @@ public static class DbInitializer
                 DeskApplicationId = app.Id,
                 DeskGroupId = group.Id
             });
-            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            needsSave = true;
         }
 
         // Upgrade old "Book Users" menu entries to the books grid page
@@ -160,10 +162,15 @@ public static class DbInitializer
             lp.Name = booksPageName;
             lp.Route = booksRoute;
             lp.UpdatedAt = DateTime.UtcNow;
+            needsSave = true;
         }
 
-        if (legacyPages.Count > 0)
+        // Flush link + legacy updates so the page query below sees the current state.
+        if (needsSave)
+        {
             await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            needsSave = false;
+        }
 
         var page = await db.Pages.AsQueryable()
             .FirstOrDefaultAsync(p => p.DeskApplicationId == app.Id && p.Route == booksRoute, ct)
@@ -186,54 +193,53 @@ public static class DbInitializer
                 DeskApplicationId = app.Id,
                 CreatedAt = DateTime.UtcNow
             });
-            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            needsSave = true;
         }
         else
         {
-            var changed = false;
             if (page.Name != booksPageName)
             {
                 page.Name = booksPageName;
-                changed = true;
+                needsSave = true;
             }
 
             if (page.Route != booksRoute)
             {
                 page.Route = booksRoute;
-                changed = true;
+                needsSave = true;
             }
 
             if (!page.IsActive)
             {
                 page.IsActive = true;
-                changed = true;
+                needsSave = true;
             }
 
-            if (changed)
-            {
+            if (needsSave)
                 page.UpdatedAt = DateTime.UtcNow;
-                await db.SaveChangesAsync(ct).ConfigureAwait(false);
-            }
         }
 
         var testUser = await db.Users.AsQueryable()
             .FirstOrDefaultAsync(u => u.LoginId == testUserLoginId, ct)
             .ConfigureAwait(false);
-        if (testUser is null)
-            return;
-
-        var ug = await db.UserGroups.AsQueryable()
-            .FirstOrDefaultAsync(x => x.UserId == testUser.Id && x.GroupId == group.Id, ct)
-            .ConfigureAwait(false);
-        if (ug is not null)
-            return;
-
-        db.UserGroups.Add(new UserGroup
+        if (testUser is not null)
         {
-            UserId = testUser.Id,
-            GroupId = group.Id,
-            AssignedAt = DateTime.UtcNow
-        });
-        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            var ug = await db.UserGroups.AsQueryable()
+                .FirstOrDefaultAsync(x => x.UserId == testUser.Id && x.GroupId == group.Id, ct)
+                .ConfigureAwait(false);
+            if (ug is null)
+            {
+                db.UserGroups.Add(new UserGroup
+                {
+                    UserId = testUser.Id,
+                    GroupId = group.Id,
+                    AssignedAt = DateTime.UtcNow
+                });
+                needsSave = true;
+            }
+        }
+
+        if (needsSave)
+            await db.SaveChangesAsync(ct).ConfigureAwait(false);
     }
 }

@@ -2,7 +2,8 @@ using System.ComponentModel.DataAnnotations;
 
 namespace HelpDesk.Models;
 
-public class DeskPage
+/// <summary>A navigable page within a <see cref="DeskApplication"/>.</summary>
+public sealed class DeskPage
 {
     public int Id { get; set; }
 

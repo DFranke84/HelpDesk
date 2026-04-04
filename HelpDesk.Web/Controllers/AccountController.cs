@@ -28,7 +28,7 @@ public class AccountController : ControllerBase
     private readonly IObservabilityService _observability;
     private readonly PasswordHasher<User> _hasher;
     private readonly PasswordResetService _passwordReset;
-    private readonly EmailSender _email;
+    private readonly IEmailSender _email;
     private readonly IConfiguration _configuration;
     private readonly LoginRateLimiter _rateLimiter;
 
@@ -37,7 +37,7 @@ public class AccountController : ControllerBase
         IObservabilityService observability,
         PasswordHasher<User> hasher,
         PasswordResetService passwordReset,
-        EmailSender email,
+        IEmailSender email,
         IConfiguration configuration,
         LoginRateLimiter rateLimiter)
     {

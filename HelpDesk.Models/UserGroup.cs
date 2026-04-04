@@ -1,6 +1,6 @@
 namespace HelpDesk.Models;
 
-public class UserGroup
+public sealed class UserGroup
 {
     public int UserId { get; set; }
     public User User { get; set; } = null!;

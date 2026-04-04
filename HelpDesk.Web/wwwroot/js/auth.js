@@ -53,12 +53,16 @@ window.helpdeskAuth = {
     }
   },
   postLogout: async function (url) {
-    const r = await fetch(url, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'X-Helpdesk-Logout-Reason': 'manual' }
-    });
-    return r.ok;
+    try {
+      const r = await fetch(url, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'X-Helpdesk-Logout-Reason': 'manual' }
+      });
+      return r.ok;
+    } catch (e) {
+      return false;
+    }
   }
 };
 

@@ -2,7 +2,8 @@ using System.ComponentModel.DataAnnotations;
 
 namespace HelpDesk.Models;
 
-public class PasswordResetToken
+/// <summary>One-time-use token for password reset, hashed and time-limited.</summary>
+public sealed class PasswordResetToken
 {
     public int Id { get; set; }
     public int UserId { get; set; }

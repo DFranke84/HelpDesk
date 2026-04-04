@@ -4,7 +4,8 @@ using System.Text.Json.Serialization;
 
 namespace HelpDesk.Models;
 
-public class User
+/// <summary>Application user with login credentials, role, and optional Active Directory mapping.</summary>
+public sealed class User
 {
     public int Id { get; set; }
 

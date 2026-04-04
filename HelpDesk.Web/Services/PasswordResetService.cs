@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HelpDesk.Web.Services;
 
+/// <summary>Creates and validates time-limited password reset tokens, with SHA-256 hashed storage.</summary>
 public class PasswordResetService
 {
     private readonly HelpDeskDbContext _db;
@@ -56,12 +57,13 @@ public class PasswordResetService
         var hash = Sha256(raw);
 
         var hours = double.Parse(_configuration["App:PasswordResetTokenHours"] ?? "24", CultureInfo.InvariantCulture);
+        var now = DateTime.UtcNow;
         _db.PasswordResetTokens.Add(new PasswordResetToken
         {
             UserId = user.Id,
             TokenHash = hash,
-            ExpiresAt = DateTime.UtcNow.AddHours(hours),
-            CreatedAt = DateTime.UtcNow
+            ExpiresAt = now.AddHours(hours),
+            CreatedAt = now
         });
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
 
@@ -85,12 +87,13 @@ public class PasswordResetService
         var raw = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
         var hash = Sha256(raw);
 
+        var now = DateTime.UtcNow;
         _db.PasswordResetTokens.Add(new PasswordResetToken
         {
             UserId = user.Id,
             TokenHash = hash,
-            ExpiresAt = DateTime.UtcNow.AddMinutes(10),
-            CreatedAt = DateTime.UtcNow
+            ExpiresAt = now.AddMinutes(10),
+            CreatedAt = now
         });
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
 
@@ -101,8 +104,8 @@ public class PasswordResetService
 
     public async Task<(bool ok, string? error)> ResetPasswordAsync(string rawToken, string newPassword, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(newPassword) || newPassword.Length < 6)
-            return (false, "New password must be at least 6 characters.");
+        if (string.IsNullOrWhiteSpace(newPassword) || newPassword.Length < Validation.PasswordPolicy.MinLength)
+            return (false, Validation.PasswordPolicy.MinLengthMessage);
 
         var hash = Sha256(rawToken);
         var token = await _db.PasswordResetTokens

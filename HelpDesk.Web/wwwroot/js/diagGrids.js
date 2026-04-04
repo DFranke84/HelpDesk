@@ -85,6 +85,7 @@ window.helpdeskDiag = {
       $(el).DataTable().destroy();
       $(el).empty();
     }
+    window.helpdeskDiag.__pending = {};
     $(el).DataTable({
       ajax: { url: apiUrl, dataSrc: '', xhrFields: { withCredentials: true } },
       order: [[5, 'desc']],
@@ -140,6 +141,7 @@ window.helpdeskDiag = {
       $(el).DataTable().destroy();
       $(el).empty();
     }
+    window.helpdeskDiag.__pending = {};
     $(el).DataTable({
       ajax: { url: apiUrl, dataSrc: '', xhrFields: { withCredentials: true } },
       order: [[0, 'desc']],
@@ -176,6 +178,7 @@ window.helpdeskDiag = {
       $(el).DataTable().destroy();
       $(el).empty();
     }
+    window.helpdeskDiag.__pending = {};
     $(el).DataTable({
       ajax: { url: apiUrl, dataSrc: '', xhrFields: { withCredentials: true } },
       order: [[0, 'desc']],
@@ -206,6 +209,7 @@ window.helpdeskDiag = {
       $(el).DataTable().destroy();
       $(el).empty();
     }
+    window.helpdeskDiag.__pending = {};
     $(el).DataTable({
       ajax: { url: apiUrl, dataSrc: '', xhrFields: { withCredentials: true } },
       order: [[1, 'desc']],
