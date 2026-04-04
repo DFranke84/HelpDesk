@@ -1,7 +1,7 @@
 namespace HelpDesk.Logging;
 
-/// <summary>Writes structured observability entries (audit, error, log) to the NLog database target.</summary>
-public interface IObservabilityService
+/// <summary>Writes structured logger entries (audit, error, log) to the NLog database target.</summary>
+public interface ILoggerService
 {
     /// <summary>Active correlation id when correlation scope started; otherwise null.</summary>
     Guid? CorrelationId { get; }
@@ -36,4 +36,3 @@ public interface IObservabilityService
     /// <returns>A task that completes when the entry is written.</returns>
     Task AddLogAsync(string message, string level, CancellationToken cancellationToken = default);
 }
-

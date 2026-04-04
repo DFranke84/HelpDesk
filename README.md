@@ -10,7 +10,7 @@ The solution contains three projects:
 |---------|---------|
 | **HelpDesk.Web** | Blazor Server host — UI, controllers, middleware, services |
 | **HelpDesk.Models** | EF Core domain models, DbContext, migrations |
-| **HelpDesk.Logging** | Cross-cutting logging and observability abstractions (NLog) |
+| **HelpDesk.Logging** | Cross-cutting logging and logger abstractions (NLog) |
 
 ### Key technology
 
@@ -139,7 +139,7 @@ HelpDesk.Models/
 └── *.cs                 # Domain entities (User, DeskApplication, etc.)
 
 HelpDesk.Logging/
-└── *.cs                 # Correlation, observability, event log abstractions
+└── *.cs                 # Correlation, logger, event log abstractions
 ```
 
 ## Deployment

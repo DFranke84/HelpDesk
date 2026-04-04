@@ -6,20 +6,20 @@ using Microsoft.EntityFrameworkCore;
 namespace HelpDesk.Web.Controllers;
 
 /// <summary>
-/// Serve NLog grid rows for admin observability views.
+/// Serve NLog grid rows for admin logger views.
 /// </summary>
 [ApiController]
 [Authorize(Roles = "Admin")]
 [Route("api/grid")]
-public class ObservabilityGridController : ControllerBase
+public class GridController : ControllerBase
 {
     private readonly HelpDeskDbContext _db;
 
     /// <summary>
-    /// Create observability grid controller.
+    /// Create grid controller.
     /// </summary>
     /// <param name="db">Help Desk database <see cref="HelpDeskDbContext"/>.</param>
-    public ObservabilityGridController(HelpDeskDbContext db)
+    public GridController(HelpDeskDbContext db)
     {
         _db = db;
     }

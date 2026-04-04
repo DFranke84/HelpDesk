@@ -8,24 +8,24 @@ namespace HelpDesk.Web.Services;
 
 /// <summary>
 /// Writes audit/error/log lines to the file logger and <b>also</b> inserts rows into the <c>NLOG</c> table via EF
-/// so login/logoff and other observability events appear even when the NLog Database target or stored procedure is misconfigured.
+/// so login/logoff and other logger events appear even when the NLog Database target or stored procedure is misconfigured.
 /// </summary>
-public sealed class WebObservabilityService : IObservabilityService
+public sealed class WebLoggerService : ILoggerService
 {
     private readonly ICorrelationContext _correlation;
     private readonly EventLogManager _log;
     private readonly IDbContextFactory<HelpDeskDbContext> _dbFactory;
-    private readonly ILogger<WebObservabilityService> _logger;
+    private readonly ILogger<WebLoggerService> _logger;
 
     /// <summary>
-    /// Create web observability service with database mirroring.
+    /// Create web logger service with database mirroring.
     /// </summary>
     /// <param name="correlation">Correlation scope <see cref="ICorrelationContext"/>.</param>
     /// <param name="log">NLog bridge <see cref="EventLogManager"/>.</param>
     /// <param name="dbFactory">Help Desk context factory <see cref="IDbContextFactory{TContext}"/>.</param>
-    /// <param name="logger">Diagnostic logger <see cref="ILogger{WebObservabilityService}"/>.</param>
-    public WebObservabilityService(ICorrelationContext correlation, EventLogManager log,
-        IDbContextFactory<HelpDeskDbContext> dbFactory, ILogger<WebObservabilityService> logger)
+    /// <param name="logger">Diagnostic logger <see cref="ILogger{WebLoggerService}"/>.</param>
+    public WebLoggerService(ICorrelationContext correlation, EventLogManager log,
+        IDbContextFactory<HelpDeskDbContext> dbFactory, ILogger<WebLoggerService> logger)
     {
         _correlation = correlation;
         _log = log;
@@ -121,7 +121,7 @@ public sealed class WebObservabilityService : IObservabilityService
                 Logged = DateTime.UtcNow,
                 Level = level,
                 Message = message,
-                Logger = "HelpDesk.Observability",
+                Logger = "HelpDesk.Logger",
                 Exception = exception,
                 ActivityCategory = activityCategory,
                 CorrelationId = correlationId,

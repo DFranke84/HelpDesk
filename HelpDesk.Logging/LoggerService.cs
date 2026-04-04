@@ -2,18 +2,18 @@ using NLog;
 
 namespace HelpDesk.Logging;
 
-/// <summary>Base observability implementation that writes audit, error, and log entries to the NLog file logger only (no database).</summary>
-public sealed class ObservabilityService : IObservabilityService
+/// <summary>Base logger implementation that writes audit, error, and log entries to the NLog file logger only (no database).</summary>
+public sealed class LoggerService : ILoggerService
 {
     private readonly ICorrelationContext _correlation;
     private readonly EventLogManager _log;
 
     /// <summary>
-    /// Create file-only observability service.
+    /// Create file-only logger service.
     /// </summary>
     /// <param name="correlation">Correlation scope <see cref="ICorrelationContext"/>.</param>
     /// <param name="log">NLog bridge <see cref="EventLogManager"/>.</param>
-    public ObservabilityService(ICorrelationContext correlation, EventLogManager log)
+    public LoggerService(ICorrelationContext correlation, EventLogManager log)
     {
         _correlation = correlation;
         _log = log;
@@ -77,4 +77,3 @@ public sealed class ObservabilityService : IObservabilityService
         return Task.CompletedTask;
     }
 }
-

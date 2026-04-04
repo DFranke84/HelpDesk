@@ -25,7 +25,7 @@ public sealed class EventLogManager
     }
 
     /// <summary>
-    /// Begin a logging scope with optional observability properties.
+    /// Begin a logging scope with optional logger properties.
     /// </summary>
     /// <param name="activityCategory">Optional activity category label.</param>
     /// <param name="correlationId">Optional correlation id.</param>

@@ -57,7 +57,7 @@ internal sealed class SkipFetchHeaderCheckAttribute : Attribute { }
 public class AccountController : ControllerBase
 {
     private readonly HelpDeskDbContext _db;
-    private readonly IObservabilityService _observability;
+    private readonly ILoggerService _loggerService;
     private readonly PasswordHasher<User> _hasher;
     private readonly PasswordResetService _passwordReset;
     private readonly IEmailSender _email;
@@ -68,7 +68,7 @@ public class AccountController : ControllerBase
     /// Create account controller with auth and email dependencies.
     /// </summary>
     /// <param name="db">Help Desk database <see cref="HelpDeskDbContext"/>.</param>
-    /// <param name="observability">Observability sink <see cref="IObservabilityService"/>.</param>
+    /// <param name="loggerService">Logger sink <see cref="ILoggerService"/>.</param>
     /// <param name="hasher">Password hasher <see cref="PasswordHasher{User}"/>.</param>
     /// <param name="passwordReset">Reset token service <see cref="PasswordResetService"/>.</param>
     /// <param name="email">Transactional email <see cref="IEmailSender"/>.</param>
@@ -76,7 +76,7 @@ public class AccountController : ControllerBase
     /// <param name="rateLimiter">Login rate limiter <see cref="LoginRateLimiter"/>.</param>
     public AccountController(
         HelpDeskDbContext db,
-        IObservabilityService observability,
+        ILoggerService loggerService,
         PasswordHasher<User> hasher,
         PasswordResetService passwordReset,
         IEmailSender email,
@@ -84,7 +84,7 @@ public class AccountController : ControllerBase
         LoginRateLimiter rateLimiter)
     {
         _db = db;
-        _observability = observability;
+        _loggerService = loggerService;
         _hasher = hasher;
         _passwordReset = passwordReset;
         _email = email;
@@ -150,7 +150,7 @@ public class AccountController : ControllerBase
                 AllowRefresh = true
             }).ConfigureAwait(false);
 
-        await _observability.AddAuditAsync("Login", user.LoginId, "Forms login", loginId, ct).ConfigureAwait(false);
+        await _loggerService.AddAuditAsync("Login", user.LoginId, "Forms login", loginId, ct).ConfigureAwait(false);
 
         ClearSuppressWindowsAutoLoginCookie();
 
@@ -221,7 +221,7 @@ public class AccountController : ControllerBase
                 AllowRefresh = true
             }).ConfigureAwait(false);
 
-        await _observability.AddAuditAsync("Login", user.LoginId, "Forms login", normalized, ct).ConfigureAwait(false);
+        await _loggerService.AddAuditAsync("Login", user.LoginId, "Forms login", normalized, ct).ConfigureAwait(false);
 
         ClearSuppressWindowsAutoLoginCookie();
 
@@ -281,7 +281,7 @@ public class AccountController : ControllerBase
                 AllowRefresh = true
             }).ConfigureAwait(false);
 
-        await _observability.AddAuditAsync("PasswordChange", user.LoginId, "User changed password", null, ct).ConfigureAwait(false);
+        await _loggerService.AddAuditAsync("PasswordChange", user.LoginId, "User changed password", null, ct).ConfigureAwait(false);
 
         return Ok(new { ok = true });
     }
@@ -313,11 +313,11 @@ public class AccountController : ControllerBase
         if (!string.IsNullOrWhiteSpace(windowsName))
         {
             using (ScopeContext.PushProperty("domainLogin", windowsName))
-                await _observability.AddAuditAsync("Logoff", auditLoginId, "User logged out", windowsName, ct).ConfigureAwait(false);
+                await _loggerService.AddAuditAsync("Logoff", auditLoginId, "User logged out", windowsName, ct).ConfigureAwait(false);
         }
         else
         {
-            await _observability.AddAuditAsync("Logoff", auditLoginId, "User logged out", null, ct).ConfigureAwait(false);
+            await _loggerService.AddAuditAsync("Logoff", auditLoginId, "User logged out", null, ct).ConfigureAwait(false);
         }
         await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme).ConfigureAwait(false);
 

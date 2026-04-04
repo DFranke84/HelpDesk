@@ -1,7 +1,7 @@
 namespace HelpDesk.Logging;
 
 /// <summary>
-/// Thread-safe correlation id holder for observability scopes.
+/// Thread-safe correlation id holder for logger scopes.
 /// </summary>
 public sealed class CorrelationContext : ICorrelationContext
 {
