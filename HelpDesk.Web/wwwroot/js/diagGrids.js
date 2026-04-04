@@ -120,7 +120,7 @@ window.helpdeskDiag = {
             if (!row || !row.correlationLinksAvailable || !data) return '';
             var id = String(data);
             return (
-              '<a class="hd-mini" href="/diag/nlog?correlationId=' +
+              '<a class="hd-mini" href="/admin/nlog?correlationId=' +
               encodeURIComponent(id) +
               '">NLog</a>'
             );
