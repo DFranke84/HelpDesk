@@ -101,7 +101,7 @@ public sealed class WebObservabilityService : IObservabilityService
         }
         catch (Exception ex)
         {
-            _logger.LogDebug(ex, "NLog table insert failed (non-blocking)");
+            _logger.LogWarning(ex, "NLog table insert failed (non-blocking)");
         }
     }
 }

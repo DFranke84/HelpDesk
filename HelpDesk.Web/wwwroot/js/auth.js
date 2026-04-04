@@ -40,7 +40,7 @@ window.helpdeskAuth = {
     try {
       var r = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch' },
         credentials: 'include',
         body: JSON.stringify(body)
       });
@@ -57,7 +57,7 @@ window.helpdeskAuth = {
       const r = await fetch(url, {
         method: 'POST',
         credentials: 'include',
-        headers: { 'X-Helpdesk-Logout-Reason': 'manual' }
+        headers: { 'X-Requested-With': 'fetch', 'X-Helpdesk-Logout-Reason': 'manual' }
       });
       return r.ok;
     } catch (e) {

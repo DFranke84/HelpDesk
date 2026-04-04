@@ -59,40 +59,23 @@
 
     <footer class="hd-footer" role="contentinfo">
         <div class="hd-footer-status">@StatusBar.Message</div>
-        <div class="hd-footer-clock">@_clockText</div>
+        <div class="hd-footer-clock"><FooterClock /></div>
     </footer>
 </div>
 
 @code {
     private bool _accountMenuOpen;
     private DotNetObjectReference<MainLayout>? _idleRef;
-    private System.Threading.Timer? _clockTimer;
-    private string _clockText = "";
     private bool _disposed;
 
     protected override void OnInitialized()
     {
-        _clockText = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
         StatusBar.Changed += OnStatusBarChanged;
         Nav.LocationChanged += OnNavigationLocationChanged;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender && _clockTimer is null)
-        {
-            _clockTimer = new System.Threading.Timer(_ =>
-            {
-                if (_disposed) return;
-                _ = InvokeAsync(() =>
-                {
-                    if (_disposed) return;
-                    _clockText = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-                    StateHasChanged();
-                });
-            }, null, TimeSpan.Zero, TimeSpan.FromSeconds(1));
-        }
-
         if (!firstRender || _idleRef is not null)
             return;
 
@@ -106,7 +89,12 @@
         catch (InvalidOperationException) { }
     }
 
-    private void OnStatusBarChanged() => _ = InvokeAsync(StateHasChanged);
+    private async void OnStatusBarChanged()
+    {
+        try { await InvokeAsync(StateHasChanged); }
+        catch (ObjectDisposedException) { }
+        catch (InvalidOperationException) { }
+    }
 
     private void OnNavigationLocationChanged(object? sender, LocationChangedEventArgs e)
     {
@@ -144,8 +132,6 @@
         _disposed = true;
         StatusBar.Changed -= OnStatusBarChanged;
         Nav.LocationChanged -= OnNavigationLocationChanged;
-        _clockTimer?.Dispose();
-        _clockTimer = null;
         try { await JS.InvokeVoidAsync("helpdeskIdle.stop"); }
         catch (Microsoft.JSInterop.JSDisconnectedException) { }
         catch (InvalidOperationException) { }

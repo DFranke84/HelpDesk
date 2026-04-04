@@ -36,8 +36,12 @@ else
         await EvaluateAccessAsync();
     }
 
-    private void OnLocationChanged(object? sender, LocationChangedEventArgs e) =>
-        _ = InvokeAsync(EvaluateAccessAsync);
+    private async void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        try { await InvokeAsync(EvaluateAccessAsync); }
+        catch (ObjectDisposedException) { }
+        catch (InvalidOperationException) { }
+    }
 
     private async Task EvaluateAccessAsync()
     {

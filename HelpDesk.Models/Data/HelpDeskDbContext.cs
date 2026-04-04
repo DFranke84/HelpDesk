@@ -2,6 +2,7 @@ using System.Text.Json;
 using HelpDesk.Logging;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace HelpDesk.Models.Data;
 
@@ -31,29 +32,23 @@ public sealed class HelpDeskDbContext : DbContext
         if (pending.Count == 0)
             return base.SaveChanges(acceptAllChangesOnSuccess);
 
-        var ownsTransaction = Database.CurrentTransaction is null;
-        var transaction = Database.CurrentTransaction ?? Database.BeginTransaction();
+        var n = base.SaveChanges(acceptAllChangesOnSuccess);
+
         try
         {
-            var n = base.SaveChanges(acceptAllChangesOnSuccess);
             foreach (var (row, entry) in pending)
             {
                 row.EntityId = ResolveEntityId(entry);
                 EntityChangeHistories.Add(row);
             }
             base.SaveChanges(acceptAllChangesOnSuccess);
-            if (ownsTransaction) transaction.Commit();
-            return n;
         }
-        catch
+        catch (Exception ex)
         {
-            if (ownsTransaction) transaction.Rollback();
-            throw;
+            System.Diagnostics.Debug.WriteLine($"Audit trail save failed: {ex.Message}");
         }
-        finally
-        {
-            if (ownsTransaction) transaction.Dispose();
-        }
+
+        return n;
     }
 
     public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
@@ -62,30 +57,23 @@ public sealed class HelpDeskDbContext : DbContext
         if (pending.Count == 0)
             return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken).ConfigureAwait(false);
 
-        var ownsTransaction = Database.CurrentTransaction is null;
-        var transaction = Database.CurrentTransaction
-            ?? await Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        var n = await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken).ConfigureAwait(false);
+
         try
         {
-            var n = await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken).ConfigureAwait(false);
             foreach (var (row, entry) in pending)
             {
                 row.EntityId = ResolveEntityId(entry);
                 EntityChangeHistories.Add(row);
             }
             await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken).ConfigureAwait(false);
-            if (ownsTransaction) await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-            return n;
         }
-        catch
+        catch (Exception ex)
         {
-            if (ownsTransaction) await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
-            throw;
+            System.Diagnostics.Debug.WriteLine($"Audit trail save failed: {ex.Message}");
         }
-        finally
-        {
-            if (ownsTransaction) await transaction.DisposeAsync().ConfigureAwait(false);
-        }
+
+        return n;
     }
 
     private List<(EntityChangeHistory Row, EntityEntry Entry)> BuildPendingHistories()
@@ -174,6 +162,15 @@ public sealed class HelpDeskDbContext : DbContext
         return true;
     }
 
+    private static readonly HashSet<string> _sensitiveProperties = new(StringComparer.OrdinalIgnoreCase)
+    {
+        nameof(User.PasswordHash),
+        nameof(User.RowVersion)
+    };
+
+    private static bool IsSafeProperty(PropertyEntry p) =>
+        !p.Metadata.IsPrimaryKey() && !_sensitiveProperties.Contains(p.Metadata.Name);
+
     private static string? BuildJsonSnapshot(EntityEntry entry)
     {
         try
@@ -181,7 +178,7 @@ public sealed class HelpDeskDbContext : DbContext
             if (entry.State == EntityState.Deleted)
             {
                 var dict = entry.Properties
-                    .Where(p => !p.Metadata.IsPrimaryKey())
+                    .Where(IsSafeProperty)
                     .ToDictionary(p => p.Metadata.Name, p => p.OriginalValue);
                 return JsonSerializer.Serialize(dict);
             }
@@ -189,13 +186,13 @@ public sealed class HelpDeskDbContext : DbContext
             if (entry.State == EntityState.Added)
             {
                 var dict = entry.Properties
-                    .Where(p => !p.Metadata.IsPrimaryKey())
+                    .Where(IsSafeProperty)
                     .ToDictionary(p => p.Metadata.Name, p => p.CurrentValue);
                 return JsonSerializer.Serialize(dict);
             }
 
             var changes = entry.Properties
-                .Where(p => p.IsModified && !p.Metadata.IsPrimaryKey())
+                .Where(p => p.IsModified && IsSafeProperty(p))
                 .Select(p => new { p.Metadata.Name, Old = p.OriginalValue, New = p.CurrentValue })
                 .ToList();
             if (changes.Count == 0)
@@ -210,6 +207,19 @@ public sealed class HelpDeskDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        var utcConverter = new ValueConverter<DateTime, DateTime>(
+            v => v.Kind == DateTimeKind.Utc ? v : v.ToUniversalTime(),
+            v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
+
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        {
+            foreach (var property in entityType.GetProperties())
+            {
+                if (property.ClrType == typeof(DateTime) || property.ClrType == typeof(DateTime?))
+                    property.SetValueConverter(utcConverter);
+            }
+        }
+
         modelBuilder.Entity<User>(e =>
         {
             e.ToTable("Users");
@@ -290,6 +300,7 @@ public sealed class HelpDeskDbContext : DbContext
             e.HasIndex(x => x.Level);
             e.HasIndex(x => x.ActivityCategory);
             e.HasIndex(x => x.CorrelationId);
+            e.HasIndex(x => x.LoginId);
             e.Property(x => x.MachineName).HasMaxLength(200);
             e.Property(x => x.Level).HasMaxLength(16);
             e.Property(x => x.Logger).HasMaxLength(300);
@@ -316,7 +327,7 @@ public sealed class HelpDeskDbContext : DbContext
         {
             e.ToTable("PasswordResetTokens");
             e.HasIndex(x => x.UserId);
-            e.HasIndex(x => x.TokenHash);
+            e.HasIndex(x => x.TokenHash).IsUnique();
             e.Property(x => x.TokenHash).HasMaxLength(128);
             e.HasOne(x => x.User)
                 .WithMany()

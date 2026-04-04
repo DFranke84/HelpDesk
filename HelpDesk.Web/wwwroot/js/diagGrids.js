@@ -66,12 +66,11 @@ window.helpdeskDiag = {
       return d.innerHTML;
     };
 
-    var safeTitle = String(title || 'Details').replace(/'/g, "\\'");
+    var safeId = id.replace(/[^a-z0-9]/gi, '');
+    var safeTitle = esc(String(title || 'Details')).replace(/'/g, '&#39;').replace(/"/g, '&quot;');
     var onclick =
-      "window.helpdeskDiag.showPending('" + id + "','" + safeTitle + "');return false;";
+      "window.helpdeskDiag.showPending('" + safeId + "','" + safeTitle + "');return false;";
 
-    // Always make the cell content clickable so users can open the full text
-    // even when DataTables/CSS truncates it with ellipsis.
     var link = '<a href="#" class="hd-cellpop" onclick="' + onclick + '">' + esc(display) + '</a>';
     return needsTruncate ? link + ' <a href="#" class="hd-more" onclick="' + onclick + '">more</a>' : link;
   },

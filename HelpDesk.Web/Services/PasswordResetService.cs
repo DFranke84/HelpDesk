@@ -56,7 +56,7 @@ public class PasswordResetService
         var raw = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
         var hash = Sha256(raw);
 
-        var hours = double.Parse(_configuration["App:PasswordResetTokenHours"] ?? "24", CultureInfo.InvariantCulture);
+        var hours = double.TryParse(_configuration["App:PasswordResetTokenHours"], CultureInfo.InvariantCulture, out var h) ? h : 24;
         var now = DateTime.UtcNow;
         _db.PasswordResetTokens.Add(new PasswordResetToken
         {

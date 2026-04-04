@@ -24,6 +24,7 @@ public sealed class AdminCatalogGridController : ControllerBase
     {
         var rows = await _db.Applications.AsNoTracking()
             .OrderBy(a => a.Name)
+            .Take(1000)
             .Select(a => new
             {
                 a.Id,
@@ -42,6 +43,7 @@ public sealed class AdminCatalogGridController : ControllerBase
     {
         var rows = await _db.Pages.AsNoTracking()
             .OrderBy(p => p.Name)
+            .Take(5000)
             .Select(p => new
             {
                 p.Id,
@@ -61,6 +63,7 @@ public sealed class AdminCatalogGridController : ControllerBase
     {
         var rows = await _db.Groups.AsNoTracking()
             .OrderBy(g => g.Name)
+            .Take(1000)
             .Select(g => new { g.Id, groupName = g.Name, description = g.Description ?? "" })
             .ToListAsync(ct)
             .ConfigureAwait(false);
@@ -74,6 +77,7 @@ public sealed class AdminCatalogGridController : ControllerBase
             .Include(ag => ag.DeskApplication)
             .Include(ag => ag.DeskGroup)
             .OrderBy(ag => ag.DeskApplication!.Name).ThenBy(ag => ag.DeskGroup!.Name)
+            .Take(5000)
             .Select(ag => new
             {
                 ag.DeskApplicationId,
@@ -122,6 +126,7 @@ public sealed class AdminCatalogGridController : ControllerBase
     {
         var projected = await _db.Users.AsNoTracking()
             .OrderBy(u => u.LoginId)
+            .Take(5000)
             .Select(u => new
             {
                 u.Id,

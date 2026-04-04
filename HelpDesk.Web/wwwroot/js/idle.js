@@ -29,7 +29,7 @@ window.helpdeskIdle = (function () {
           await fetch(logoutUrl, {
             method: 'POST',
             credentials: 'include',
-            headers: { 'X-Helpdesk-Logout-Reason': 'idle' }
+            headers: { 'X-Requested-With': 'fetch', 'X-Helpdesk-Logout-Reason': 'idle' }
           });
         } catch (e) { /* network failure is acceptable */ }
 

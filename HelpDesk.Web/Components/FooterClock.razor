@@ -1,0 +1,30 @@
+@implements IDisposable
+
+@_clockText
+
+@code {
+    private System.Threading.Timer? _timer;
+    private string _clockText = "";
+    private bool _disposed;
+
+    protected override void OnInitialized()
+    {
+        _clockText = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+        _timer = new System.Threading.Timer(_ =>
+        {
+            if (_disposed) return;
+            _ = InvokeAsync(() =>
+            {
+                if (_disposed) return;
+                _clockText = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+                StateHasChanged();
+            });
+        }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+        _timer?.Dispose();
+    }
+}

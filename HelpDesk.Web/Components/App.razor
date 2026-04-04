@@ -16,6 +16,13 @@
 <body>
     @* Static SSR does not run @onclick or IJSRuntime; Interactive Server is required for login and the rest of the UI. *@
     <Routes @rendermode="InteractiveServer" />
+
+    <div id="blazor-error-ui" data-nosnippet>
+        An unhandled error has occurred.
+        <a href="" class="reload">Reload</a>
+        <a class="dismiss" onclick="this.parentElement.style.display='none'">&#x2715;</a>
+    </div>
+
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"
             integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
     <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"

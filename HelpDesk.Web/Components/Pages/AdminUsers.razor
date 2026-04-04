@@ -301,7 +301,7 @@
             if (!string.IsNullOrWhiteSpace(_password))
             {
                 u.PasswordHash = Hasher.HashPassword(u, _password);
-                u.MustChangePassword = false;
+                u.MustChangePassword = true;
             }
         }
         else

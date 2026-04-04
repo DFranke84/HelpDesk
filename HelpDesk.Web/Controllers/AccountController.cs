@@ -10,18 +10,42 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
 using NLog;
 
 namespace HelpDesk.Web.Controllers;
 
+/// <summary>Rejects requests that lack the <c>X-Requested-With</c> header (CSRF defense for JSON/fetch endpoints).</summary>
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]
+internal sealed class RequireFetchHeaderAttribute : ActionFilterAttribute
+{
+    public override void OnActionExecuting(ActionExecutingContext context)
+    {
+        if (context.ActionDescriptor.EndpointMetadata.Any(m => m is SkipFetchHeaderCheckAttribute))
+            return;
+
+        if (!context.HttpContext.Request.Headers.ContainsKey("X-Requested-With"))
+        {
+            context.Result = new BadRequestObjectResult("Missing required request header.");
+            return;
+        }
+        base.OnActionExecuting(context);
+    }
+}
+
+/// <summary>Skips the <see cref="RequireFetchHeaderAttribute"/> check (for browser form POST endpoints).</summary>
+[AttributeUsage(AttributeTargets.Method)]
+internal sealed class SkipFetchHeaderCheckAttribute : Attribute { }
+
 /// <remarks>
 /// [ApiController] is omitted so <c>login-form</c> accepts <c>application/x-www-form-urlencoded</c> POSTs reliably.
-/// Antiforgery is handled per-endpoint: JSON/fetch endpoints ignore it (custom headers provide implicit CSRF defense),
-/// and form-POST endpoints are protected by SameSite=Lax cookies plus endpoint-level security (credentials / secret tokens).
+/// JSON/fetch endpoints require <c>X-Requested-With</c> header for CSRF defense (cross-origin forms cannot set custom headers).
+/// Form-POST endpoints are exempt and rely on SameSite=Lax cookies plus endpoint-level security (credentials / secret tokens).
 /// </remarks>
 [Route("api/[controller]")]
+[RequireFetchHeader]
 public class AccountController : ControllerBase
 {
     private readonly HelpDeskDbContext _db;
@@ -75,6 +99,12 @@ public class AccountController : ControllerBase
             return Unauthorized();
         }
 
+        if (string.IsNullOrEmpty(user.PasswordHash))
+        {
+            _rateLimiter.RecordFailure(loginId);
+            return Unauthorized();
+        }
+
         var verify = _hasher.VerifyHashedPassword(user, user.PasswordHash, req.Password);
         if (verify == PasswordVerificationResult.Failed)
         {
@@ -110,6 +140,7 @@ public class AccountController : ControllerBase
     /// <remarks>Antiforgery tokens cannot be rendered in interactive-mode Blazor; SameSite=Lax cookies mitigate cross-site POST.</remarks>
     [AllowAnonymous]
     [IgnoreAntiforgeryToken]
+    [SkipFetchHeaderCheck]
     [HttpPost("login-form")]
     public async Task<IActionResult> LoginForm(
         [FromForm] string? loginId,
@@ -127,6 +158,12 @@ public class AccountController : ControllerBase
         var user = await _db.Users.FirstOrDefaultAsync(u => u.LoginId == normalized && u.IsActive, ct)
             .ConfigureAwait(false);
         if (user is null)
+        {
+            _rateLimiter.RecordFailure(normalized);
+            return Redirect("/login?loginError=invalid");
+        }
+
+        if (string.IsNullOrEmpty(user.PasswordHash))
         {
             _rateLimiter.RecordFailure(normalized);
             return Redirect("/login?loginError=invalid");
@@ -183,6 +220,9 @@ public class AccountController : ControllerBase
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct).ConfigureAwait(false);
         if (user is null)
             return NotFound();
+
+        if (string.IsNullOrEmpty(user.PasswordHash))
+            return BadRequest(new { error = "Current password is incorrect." });
 
         var verify = _hasher.VerifyHashedPassword(user, user.PasswordHash, req.CurrentPassword ?? "");
         if (verify == PasswordVerificationResult.Failed)
@@ -283,11 +323,12 @@ public class AccountController : ControllerBase
         if (string.IsNullOrWhiteSpace(req.Email))
             return BadRequest();
         var link = await _passwordReset.CreateResetTokenAsync(req.Email.Trim(), ct).ConfigureAwait(false);
-        if (link is null)
-            return Ok(new { sent = false }); // do not reveal whether email exists
+        if (link is not null)
+        {
+            await _email.SendAsync(req.Email.Trim(), "Help Desk password reset",
+                $"Use this one-time link to set a new password:\r\n{link}", ct).ConfigureAwait(false);
+        }
 
-        await _email.SendAsync(req.Email.Trim(), "Help Desk password reset",
-            $"Use this one-time link to set a new password:\r\n{link}", ct).ConfigureAwait(false);
         return Ok(new { sent = true });
     }
 
@@ -317,6 +358,7 @@ public class AccountController : ControllerBase
     /// <remarks>Antiforgery tokens cannot be rendered in interactive-mode Blazor; SameSite=Lax cookies mitigate cross-site POST.</remarks>
     [AllowAnonymous]
     [IgnoreAntiforgeryToken]
+    [SkipFetchHeaderCheck]
     [HttpPost("request-password-reset-by-login-form")]
     public async Task<IActionResult> RequestPasswordResetByLoginForm(
         [FromForm] string? loginId,
@@ -398,6 +440,7 @@ public class AccountController : ControllerBase
     /// <remarks>Antiforgery tokens cannot be rendered in interactive-mode Blazor; SameSite=Lax cookies mitigate cross-site POST. Requires a valid secret token.</remarks>
     [AllowAnonymous]
     [IgnoreAntiforgeryToken]
+    [SkipFetchHeaderCheck]
     [HttpPost("reset-password-form")]
     public async Task<IActionResult> ResetPasswordForm(
         [FromForm] string? token,

@@ -22,6 +22,7 @@ public sealed class BooksCatalogGridController : ControllerBase
     {
         var rows = await _db.Books.AsNoTracking()
             .OrderBy(b => b.Title)
+            .Take(5000)
             .Select(b => new
             {
                 id = b.BookId,
