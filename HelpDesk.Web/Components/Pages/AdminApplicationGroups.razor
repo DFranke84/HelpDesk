@@ -22,7 +22,7 @@
     <h1>Application groups</h1>
     <p class="muted">Link applications to groups (who may access an application’s pages). Groups themselves are edited on <a href="/admin/groups">Groups</a>.</p>
     <div class="hd-admin-toolbar">
-        <button type="button" class="hd-btn primary" @onclick="OpenAddAsync" disabled="@(_applications.Count == 0 || _groups.Count == 0)">Add</button>
+        <button type="button" class="hd-btn primary" @onclick="OpenAdd" disabled="@(_applications.Count == 0 || _groups.Count == 0)">Add</button>
     </div>
     @if (_applications.Count == 0 || _groups.Count == 0)
     {
@@ -100,9 +100,9 @@
 
     private async Task ReloadLookupsAsync()
     {
-        await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
-        _applications = await db.Applications.AsNoTracking().OrderBy(a => a.Name).ToListAsync().ConfigureAwait(false);
-        _groups = await db.Groups.AsNoTracking().OrderBy(g => g.Name).ToListAsync().ConfigureAwait(false);
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _applications = await db.Applications.AsNoTracking().OrderBy(a => a.Name).ToListAsync();
+        _groups = await db.Groups.AsNoTracking().OrderBy(g => g.Name).ToListAsync();
         if (_applications.Count > 0)
             _applicationId = _applications[0].Id;
         if (_groups.Count > 0)
@@ -113,25 +113,26 @@
     {
         if (_applications.Count == 0 || _groups.Count == 0)
             return;
-        if (!await JS.InvokeAsync<bool>("helpdeskAdmin.needsInit", TableId).ConfigureAwait(false))
+        if (!await JS.InvokeAsync<bool>("helpdeskAdmin.needsInit", TableId))
             return;
         if (_interop is null)
         {
             _interop = DotNetObjectReference.Create(this);
-            await JS.InvokeVoidAsync("helpdeskAdmin.register", InteropKey, _interop).ConfigureAwait(false);
+            await JS.InvokeVoidAsync("helpdeskAdmin.register", InteropKey, _interop);
         }
         var url = Nav.ToAbsoluteUri("/api/grid/admin/application-groups").ToString();
-        await JS.InvokeVoidAsync("helpdeskAdmin.initApplicationGroups", TableId, url).ConfigureAwait(false);
+        await JS.InvokeVoidAsync("helpdeskAdmin.initApplicationGroups", TableId, url);
     }
 
     public async ValueTask DisposeAsync()
     {
         try
         {
-            await JS.InvokeVoidAsync("helpdeskAdmin.unregister", InteropKey).ConfigureAwait(false);
-            await JS.InvokeVoidAsync("helpdeskAdmin.destroyTable", TableId).ConfigureAwait(false);
+            await JS.InvokeVoidAsync("helpdeskAdmin.unregister", InteropKey);
+            await JS.InvokeVoidAsync("helpdeskAdmin.destroyTable", TableId);
         }
-        catch { /* */ }
+        catch (Microsoft.JSInterop.JSDisconnectedException) { }
+        catch (InvalidOperationException) { }
         _interop?.Dispose();
     }
 
@@ -146,7 +147,7 @@
             _groupId = _groups[0].Id;
     }
 
-    private async Task OpenAddAsync()
+    private void OpenAdd()
     {
         if (_applications.Count == 0 || _groups.Count == 0)
         {
@@ -156,7 +157,6 @@
         ResetForAdd();
         _modalOpen = true;
         _msg = null;
-        await Task.CompletedTask;
     }
 
     [JSInvokable]
@@ -175,15 +175,15 @@
     [JSInvokable]
     public async Task PromptDelete(int deskApplicationId, int deskGroupId)
     {
-        if (!await JS.InvokeAsync<bool>("confirm", "Remove this application–group link?").ConfigureAwait(false))
+        if (!await JS.InvokeAsync<bool>("confirm", "Remove this application–group link?"))
             return;
-        await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
+        await using var db = await DbFactory.CreateDbContextAsync();
         var entity = await db.DeskApplicationGroups.FirstOrDefaultAsync(
-            x => x.DeskApplicationId == deskApplicationId && x.DeskGroupId == deskGroupId).ConfigureAwait(false);
+            x => x.DeskApplicationId == deskApplicationId && x.DeskGroupId == deskGroupId);
         if (entity is null)
             return;
         db.DeskApplicationGroups.Remove(entity);
-        if (!await db.TrySaveChangesAsync(JS).ConfigureAwait(false))
+        if (!await db.TrySaveChangesAsync(JS))
             return;
         if (_editing && _origApplicationId == deskApplicationId && _origGroupId == deskGroupId)
         {
@@ -193,13 +193,13 @@
         _msg = "Deleted.";
         StatusBar.SetMessage("Deleted.");
         MenuRefresh.NotifyMenuChanged();
-        await JS.InvokeVoidAsync("helpdeskAdmin.reloadTable", TableId).ConfigureAwait(false);
+        await JS.InvokeVoidAsync("helpdeskAdmin.reloadTable", TableId);
         await InvokeAsync(StateHasChanged);
     }
 
     private async Task CloseModalAsync()
     {
-        if (!await JS.InvokeAsync<bool>("confirm", "Close the editor? Unsaved changes will be lost.").ConfigureAwait(false))
+        if (!await JS.InvokeAsync<bool>("confirm", "Close the editor? Unsaved changes will be lost."))
             return;
         _modalOpen = false;
         ResetForAdd();
@@ -207,7 +207,7 @@
 
     private async Task ClearFormAsync()
     {
-        if (!await JS.InvokeAsync<bool>("confirm", "Clear the form? Unsaved changes will be lost.").ConfigureAwait(false))
+        if (!await JS.InvokeAsync<bool>("confirm", "Clear the form? Unsaved changes will be lost."))
             return;
         if (_editing && _origApplicationId is { } oa && _origGroupId is { } og)
             await OpenEdit(oa, og);
@@ -225,10 +225,10 @@
         }
 
         var confirmMsg = _editing ? "Save changes to this link?" : "Create this link?";
-        if (!await JS.InvokeAsync<bool>("confirm", confirmMsg).ConfigureAwait(false))
+        if (!await JS.InvokeAsync<bool>("confirm", confirmMsg))
             return;
 
-        await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
+        await using var db = await DbFactory.CreateDbContextAsync();
 
         if (_editing && _origApplicationId is { } oa && _origGroupId is { } og)
         {
@@ -238,13 +238,13 @@
                 return;
             }
 
-            if (await db.DeskApplicationGroups.AnyAsync(x => x.DeskApplicationId == _applicationId && x.DeskGroupId == _groupId).ConfigureAwait(false))
+            if (await db.DeskApplicationGroups.AnyAsync(x => x.DeskApplicationId == _applicationId && x.DeskGroupId == _groupId))
             {
                 _msg = "That link already exists.";
                 return;
             }
 
-            var old = await db.DeskApplicationGroups.FirstOrDefaultAsync(x => x.DeskApplicationId == oa && x.DeskGroupId == og).ConfigureAwait(false);
+            var old = await db.DeskApplicationGroups.FirstOrDefaultAsync(x => x.DeskApplicationId == oa && x.DeskGroupId == og);
             if (old is null)
             {
                 _msg = "Original row missing.";
@@ -256,7 +256,7 @@
         }
         else
         {
-            if (await db.DeskApplicationGroups.AnyAsync(x => x.DeskApplicationId == _applicationId && x.DeskGroupId == _groupId).ConfigureAwait(false))
+            if (await db.DeskApplicationGroups.AnyAsync(x => x.DeskApplicationId == _applicationId && x.DeskGroupId == _groupId))
             {
                 _msg = "That link already exists.";
                 return;
@@ -266,7 +266,7 @@
         }
 
         var wasEditing = _editing;
-        if (!await db.TrySaveChangesAsync(JS).ConfigureAwait(false))
+        if (!await db.TrySaveChangesAsync(JS))
             return;
         _modalOpen = false;
         ResetForAdd();
@@ -274,6 +274,6 @@
         _msg = wasEditing ? "Updated." : "Added.";
         StatusBar.SetMessage(wasEditing ? "Updated." : "Added.");
         MenuRefresh.NotifyMenuChanged();
-        await JS.InvokeVoidAsync("helpdeskAdmin.reloadTable", TableId).ConfigureAwait(false);
+        await JS.InvokeVoidAsync("helpdeskAdmin.reloadTable", TableId);
     }
 }

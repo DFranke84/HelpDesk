@@ -26,7 +26,7 @@
     <h1>Groups</h1>
     <p class="muted">To grant applications access to groups, use <a href="/admin/application-groups">Application groups</a>.</p>
     <div class="hd-admin-toolbar">
-        <button type="button" class="hd-btn primary" @onclick="OpenAddAsync">Add</button>
+        <button type="button" class="hd-btn primary" @onclick="OpenAdd">Add</button>
     </div>
     <table id="tbl-admin-groups" class="hd-dt cell-border compact stripe" style="width:100%"></table>
     @if (!string.IsNullOrEmpty(_msg) && !_modalOpen)
@@ -74,22 +74,23 @@
     {
         if (!firstRender)
             return;
-        if (!await JS.InvokeAsync<bool>("helpdeskAdmin.needsInit", TableId).ConfigureAwait(false))
+        if (!await JS.InvokeAsync<bool>("helpdeskAdmin.needsInit", TableId))
             return;
         _interop = DotNetObjectReference.Create(this);
-        await JS.InvokeVoidAsync("helpdeskAdmin.register", InteropKey, _interop).ConfigureAwait(false);
+        await JS.InvokeVoidAsync("helpdeskAdmin.register", InteropKey, _interop);
         var url = Nav.ToAbsoluteUri("/api/grid/admin/groups").ToString();
-        await JS.InvokeVoidAsync("helpdeskAdmin.initGroups", TableId, url).ConfigureAwait(false);
+        await JS.InvokeVoidAsync("helpdeskAdmin.initGroups", TableId, url);
     }
 
     public async ValueTask DisposeAsync()
     {
         try
         {
-            await JS.InvokeVoidAsync("helpdeskAdmin.unregister", InteropKey).ConfigureAwait(false);
-            await JS.InvokeVoidAsync("helpdeskAdmin.destroyTable", TableId).ConfigureAwait(false);
+            await JS.InvokeVoidAsync("helpdeskAdmin.unregister", InteropKey);
+            await JS.InvokeVoidAsync("helpdeskAdmin.destroyTable", TableId);
         }
-        catch { /* */ }
+        catch (Microsoft.JSInterop.JSDisconnectedException) { }
+        catch (InvalidOperationException) { }
         _interop?.Dispose();
     }
 
@@ -100,19 +101,18 @@
         _desc = "";
     }
 
-    private async Task OpenAddAsync()
+    private void OpenAdd()
     {
         ResetEmpty();
         _modalOpen = true;
         _msg = null;
-        await Task.CompletedTask;
     }
 
     [JSInvokable]
     public async Task OpenEdit(int id)
     {
-        await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
-        var g = await db.Groups.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var g = await db.Groups.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
         if (g is null)
         {
             _msg = "Group not found.";
@@ -130,23 +130,23 @@
     [JSInvokable]
     public async Task PromptDelete(int id)
     {
-        await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
-        var g = await db.Groups.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var g = await db.Groups.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
         if (g is null)
         {
             _msg = "Not found.";
             await InvokeAsync(StateHasChanged);
             return;
         }
-        if (!await JS.InvokeAsync<bool>("confirm", $"Delete group \"{g.Name}\"? User assignments and application links for this group will be removed.").ConfigureAwait(false))
+        if (!await JS.InvokeAsync<bool>("confirm", $"Delete group \"{g.Name}\"? User assignments and application links for this group will be removed."))
             return;
 
-        var row = await db.Groups.FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
+        var row = await db.Groups.FirstOrDefaultAsync(x => x.Id == id);
         if (row is null)
             return;
 
         db.Groups.Remove(row);
-        if (!await db.TrySaveChangesAsync(JS).ConfigureAwait(false))
+        if (!await db.TrySaveChangesAsync(JS))
             return;
         if (_editingId == id)
         {
@@ -156,13 +156,13 @@
         _msg = "Deleted.";
         StatusBar.SetMessage("Deleted.");
         MenuRefresh.NotifyMenuChanged();
-        await JS.InvokeVoidAsync("helpdeskAdmin.reloadTable", TableId).ConfigureAwait(false);
+        await JS.InvokeVoidAsync("helpdeskAdmin.reloadTable", TableId);
         await InvokeAsync(StateHasChanged);
     }
 
     private async Task CloseModalAsync()
     {
-        if (!await JS.InvokeAsync<bool>("confirm", "Close the editor? Unsaved changes will be lost.").ConfigureAwait(false))
+        if (!await JS.InvokeAsync<bool>("confirm", "Close the editor? Unsaved changes will be lost."))
             return;
         _modalOpen = false;
         ResetEmpty();
@@ -170,12 +170,12 @@
 
     private async Task ClearFormAsync()
     {
-        if (!await JS.InvokeAsync<bool>("confirm", "Clear the form? Unsaved changes will be lost.").ConfigureAwait(false))
+        if (!await JS.InvokeAsync<bool>("confirm", "Clear the form? Unsaved changes will be lost."))
             return;
         if (_editingId is { } gid)
         {
-            await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
-            var g = await db.Groups.AsNoTracking().FirstOrDefaultAsync(x => x.Id == gid).ConfigureAwait(false);
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var g = await db.Groups.AsNoTracking().FirstOrDefaultAsync(x => x.Id == gid);
             if (g is not null)
                 await OpenEdit(g.Id);
             else
@@ -198,10 +198,10 @@
         }
 
         var confirmMsg = _editingId is null ? "Create this group?" : "Save changes to this group?";
-        if (!await JS.InvokeAsync<bool>("confirm", confirmMsg).ConfigureAwait(false))
+        if (!await JS.InvokeAsync<bool>("confirm", confirmMsg))
             return;
 
-        await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
+        await using var db = await DbFactory.CreateDbContextAsync();
 
         if (_editingId is { } gid)
         {
@@ -233,7 +233,7 @@
         _msg = "Saved.";
         StatusBar.SetMessage("Saved.");
         MenuRefresh.NotifyMenuChanged();
-        await JS.InvokeVoidAsync("helpdeskAdmin.reloadTable", TableId).ConfigureAwait(false);
+        await JS.InvokeVoidAsync("helpdeskAdmin.reloadTable", TableId);
     }
 
     private void OnNameInput(ChangeEventArgs e) =>

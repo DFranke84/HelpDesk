@@ -50,11 +50,10 @@ else
     {
         _navigatingAway = false;
         _accessDenied = false;
-        await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
+        await using var db = await DbFactory.CreateDbContextAsync();
         _page = await db.Pages.AsNoTracking()
             .Where(p => p.Id == PageId && p.DeskApplicationId == AppId)
-            .FirstOrDefaultAsync()
-            .ConfigureAwait(false);
+            .FirstOrDefaultAsync();
 
         if (_page is null)
         {
@@ -64,7 +63,7 @@ else
 
         _title = _page.Name;
 
-        var authState = await AuthState.GetAuthenticationStateAsync().ConfigureAwait(false);
+        var authState = await AuthState.GetAuthenticationStateAsync();
         var user = authState.User;
         if (user.Identity?.IsAuthenticated != true
             || !int.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
@@ -74,7 +73,7 @@ else
         }
 
         var isAdmin = user.IsInRole(nameof(UserRole.Admin));
-        var allowed = await MenuService.GetAccessiblePagesAsync(AppId, userId, isAdmin).ConfigureAwait(false);
+        var allowed = await MenuService.GetAccessiblePagesAsync(AppId, userId, isAdmin);
         if (!allowed.Exists(p => p.Id == PageId))
         {
             _accessDenied = true;

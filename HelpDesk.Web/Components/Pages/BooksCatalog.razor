@@ -19,7 +19,7 @@
     <h1>Books — catalog</h1>
     <p class="muted">Titles in the <strong>Books</strong> database (<code>dbo.Books</code>).</p>
     <div class="hd-admin-toolbar">
-        <button type="button" class="hd-btn primary" @onclick="OpenAddAsync" disabled="@(_publishers.Count == 0)">Add</button>
+        <button type="button" class="hd-btn primary" @onclick="OpenAdd" disabled="@(_publishers.Count == 0)">Add</button>
     </div>
     @if (_publishers.Count == 0)
     {
@@ -117,8 +117,8 @@
 
     protected override async Task OnInitializedAsync()
     {
-        await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
-        _publishers = await db.Publishers.AsNoTracking().OrderBy(p => p.Name).ToListAsync().ConfigureAwait(false);
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _publishers = await db.Publishers.AsNoTracking().OrderBy(p => p.Name).ToListAsync();
         if (_publishers.Count > 0)
             _publisherId = _publishers[0].PublisherId;
     }
@@ -127,26 +127,27 @@
     {
         if (_publishers.Count == 0)
             return;
-        if (!await JS.InvokeAsync<bool>("helpdeskAdmin.needsInit", TableId).ConfigureAwait(false))
+        if (!await JS.InvokeAsync<bool>("helpdeskAdmin.needsInit", TableId))
             return;
         if (_interop is null)
         {
             _interop = DotNetObjectReference.Create(this);
-            await JS.InvokeVoidAsync("helpdeskAdmin.register", InteropKey, _interop).ConfigureAwait(false);
+            await JS.InvokeVoidAsync("helpdeskAdmin.register", InteropKey, _interop);
         }
 
         var url = Nav.ToAbsoluteUri("/api/grid/books/catalog").ToString();
-        await JS.InvokeVoidAsync("helpdeskAdmin.initBooksCatalog", TableId, url).ConfigureAwait(false);
+        await JS.InvokeVoidAsync("helpdeskAdmin.initBooksCatalog", TableId, url);
     }
 
     public async ValueTask DisposeAsync()
     {
         try
         {
-            await JS.InvokeVoidAsync("helpdeskAdmin.unregister", InteropKey).ConfigureAwait(false);
-            await JS.InvokeVoidAsync("helpdeskAdmin.destroyTable", TableId).ConfigureAwait(false);
+            await JS.InvokeVoidAsync("helpdeskAdmin.unregister", InteropKey);
+            await JS.InvokeVoidAsync("helpdeskAdmin.destroyTable", TableId);
         }
-        catch { /* */ }
+        catch (Microsoft.JSInterop.JSDisconnectedException) { }
+        catch (InvalidOperationException) { }
         _interop?.Dispose();
     }
 
@@ -164,19 +165,18 @@
         _description = "";
     }
 
-    private async Task OpenAddAsync()
+    private void OpenAdd()
     {
         ResetEmpty();
         _modalOpen = true;
         _msg = null;
-        await Task.CompletedTask;
     }
 
     [JSInvokable]
     public async Task OpenEdit(int id)
     {
-        await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
-        var b = await db.Books.AsNoTracking().FirstOrDefaultAsync(x => x.BookId == id).ConfigureAwait(false);
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var b = await db.Books.AsNoTracking().FirstOrDefaultAsync(x => x.BookId == id);
         if (b is null)
         {
             _msg = "Book not found.";
@@ -204,8 +204,8 @@
         _msg = null;
         string? titleToConfirm;
         {
-            await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
-            var b = await db.Books.AsNoTracking().FirstOrDefaultAsync(x => x.BookId == id).ConfigureAwait(false);
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var b = await db.Books.AsNoTracking().FirstOrDefaultAsync(x => x.BookId == id);
             if (b is null)
             {
                 _msg = "Not found.";
@@ -215,17 +215,17 @@
             titleToConfirm = b.Title;
         }
 
-        if (!await JS.InvokeAsync<bool>("confirm", $"Delete \"{titleToConfirm}\"?").ConfigureAwait(false))
+        if (!await JS.InvokeAsync<bool>("confirm", $"Delete \"{titleToConfirm}\"?"))
             return;
 
         {
-            await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
-            var row = await db.Books.FirstOrDefaultAsync(x => x.BookId == id).ConfigureAwait(false);
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var row = await db.Books.FirstOrDefaultAsync(x => x.BookId == id);
             if (row is null)
                 return;
 
             db.Books.Remove(row);
-            if (!await db.TrySaveChangesAsync(JS).ConfigureAwait(false))
+            if (!await db.TrySaveChangesAsync(JS))
                 return;
         }
         if (_editingId == id)
@@ -236,13 +236,13 @@
 
         _msg = "Deleted.";
         StatusBar.SetMessage("Deleted.");
-        await JS.InvokeVoidAsync("helpdeskAdmin.reloadTable", TableId).ConfigureAwait(false);
+        await JS.InvokeVoidAsync("helpdeskAdmin.reloadTable", TableId);
         await InvokeAsync(StateHasChanged);
     }
 
     private async Task CloseModalAsync()
     {
-        if (!await JS.InvokeAsync<bool>("confirm", "Close the editor? Unsaved changes will be lost.").ConfigureAwait(false))
+        if (!await JS.InvokeAsync<bool>("confirm", "Close the editor? Unsaved changes will be lost."))
             return;
         _modalOpen = false;
         ResetEmpty();
@@ -250,12 +250,12 @@
 
     private async Task ClearFormAsync()
     {
-        if (!await JS.InvokeAsync<bool>("confirm", "Clear the form? Unsaved changes will be lost.").ConfigureAwait(false))
+        if (!await JS.InvokeAsync<bool>("confirm", "Clear the form? Unsaved changes will be lost."))
             return;
         if (_editingId is { } bid)
         {
-            await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
-            var b = await db.Books.AsNoTracking().FirstOrDefaultAsync(x => x.BookId == bid).ConfigureAwait(false);
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var b = await db.Books.AsNoTracking().FirstOrDefaultAsync(x => x.BookId == bid);
             if (b is not null)
                 await OpenEdit(b.BookId);
             else
@@ -300,12 +300,12 @@
 
         var editingId = _editingId;
         {
-            await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
+            await using var db = await DbFactory.CreateDbContextAsync();
             var existingIsbns = await db.Books.AsNoTracking()
                 .Where(x => !editingId.HasValue || x.BookId != editingId.Value)
                 .Select(x => x.Isbn13)
                 .ToListAsync()
-                .ConfigureAwait(false);
+;
             if (existingIsbns.Any(s => string.Equals(s.Trim(), isbn, StringComparison.Ordinal)))
             {
                 _msg = "Another book already uses this ISBN-13.";
@@ -314,14 +314,14 @@
         }
 
         var confirmMsg = _editingId is null ? "Create this book?" : "Save changes?";
-        if (!await JS.InvokeAsync<bool>("confirm", confirmMsg).ConfigureAwait(false))
+        if (!await JS.InvokeAsync<bool>("confirm", confirmMsg))
             return;
 
         {
-            await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
+            await using var db = await DbFactory.CreateDbContextAsync();
             if (_editingId is { } id)
             {
-                var b = await db.Books.FirstOrDefaultAsync(x => x.BookId == id).ConfigureAwait(false);
+                var b = await db.Books.FirstOrDefaultAsync(x => x.BookId == id);
                 if (b is null)
                 {
                     _msg = "Not found.";
@@ -353,14 +353,14 @@
                 });
             }
 
-            if (!await db.TrySaveChangesAsync(JS).ConfigureAwait(false))
+            if (!await db.TrySaveChangesAsync(JS))
                 return;
         }
         _modalOpen = false;
         ResetEmpty();
         _msg = "Saved.";
         StatusBar.SetMessage("Saved.");
-        await JS.InvokeVoidAsync("helpdeskAdmin.reloadTable", TableId).ConfigureAwait(false);
+        await JS.InvokeVoidAsync("helpdeskAdmin.reloadTable", TableId);
     }
 
     private static string NormalizeIsbn13(string? s)

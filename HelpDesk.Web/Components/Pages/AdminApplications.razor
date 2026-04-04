@@ -22,20 +22,12 @@
 
 @inject NavigationManager Nav
 
-
-
 <PageTitle>Applications</PageTitle>
 
-
-
 <div class="hd-admin-page">
-
     <h1>Applications</h1>
-
     <div class="hd-admin-toolbar hd-apps-toolbar">
-
-        <button type="button" class="hd-btn primary" @onclick="OpenAddAsync">Add</button>
-
+        <button type="button" class="hd-btn primary" @onclick="OpenAdd">Add</button>
     </div>
 
     <div class="hd-apps-examples">
@@ -65,451 +57,235 @@
     {
         <p class="muted">@_msg</p>
     }
-
 </div>
 
-
-
 @if (_modalOpen)
-
 {
-
     <div class="hd-modal-backdrop">
-
         <div class="hd-modal-scrim" @onclick="CloseModalAsync"></div>
-
         <div class="hd-modal" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
-
             @if (!string.IsNullOrEmpty(_msg))
             {
                 <p class="hd-modal-banner" role="alert">@_msg</p>
             }
-
             <h3 class="hd-modal-title">@(_editingId is null ? "Add application" : "Edit application")</h3>
-
             <div class="form-row"><label>Name</label><input class="hd-input" value="@_name" @oninput="OnNameInput" autocomplete="off" /></div>
-
             <div class="form-row"><label>Description</label><input class="hd-input" @bind="_desc" /></div>
-
             <label><input type="checkbox" @bind="_usesExt" /> Uses external database</label>
-
             <div class="form-row"><label>External connection name (config key)</label><input class="hd-input" @bind="_conn" /></div>
-
             <label><input type="checkbox" @bind="_active" /> Active</label>
-
             <div class="hd-modal-actions">
-
                 <button type="button" class="hd-btn primary" @onclick="SaveAsync">Save</button>
-
                 @if (_editingId is null)
                 {
                     <button type="button" class="hd-btn" @onclick="ClearFormAsync">Clear</button>
                 }
-
                 <button type="button" class="hd-btn" @onclick="CloseModalAsync">Cancel</button>
-
             </div>
-
         </div>
-
     </div>
-
 }
 
-
-
 @code {
-
     private const string TableId = "tbl-admin-applications";
-
     private const string InteropKey = "applications";
-
-
 
     private DotNetObjectReference<AdminApplications>? _interop;
 
-
-
     private int? _editingId;
-
     private bool _modalOpen;
-
     private string _name = "";
-
     private string? _desc;
-
     private bool _usesExt;
-
     private string? _conn;
-
     private bool _active = true;
-
     private string? _msg;
 
-
-
     protected override async Task OnAfterRenderAsync(bool firstRender)
-
     {
-
         if (!firstRender)
-
             return;
-
-        if (!await JS.InvokeAsync<bool>("helpdeskAdmin.needsInit", TableId).ConfigureAwait(false))
-
+        if (!await JS.InvokeAsync<bool>("helpdeskAdmin.needsInit", TableId))
             return;
-
         _interop = DotNetObjectReference.Create(this);
-
-        await JS.InvokeVoidAsync("helpdeskAdmin.register", InteropKey, _interop).ConfigureAwait(false);
-
+        await JS.InvokeVoidAsync("helpdeskAdmin.register", InteropKey, _interop);
         var url = Nav.ToAbsoluteUri("/api/grid/admin/applications").ToString();
-
-        await JS.InvokeVoidAsync("helpdeskAdmin.initApplications", TableId, url).ConfigureAwait(false);
-
+        await JS.InvokeVoidAsync("helpdeskAdmin.initApplications", TableId, url);
     }
-
-
 
     public async ValueTask DisposeAsync()
-
     {
-
         try
-
         {
-
-            await JS.InvokeVoidAsync("helpdeskAdmin.unregister", InteropKey).ConfigureAwait(false);
-
-            await JS.InvokeVoidAsync("helpdeskAdmin.destroyTable", TableId).ConfigureAwait(false);
-
+            await JS.InvokeVoidAsync("helpdeskAdmin.unregister", InteropKey);
+            await JS.InvokeVoidAsync("helpdeskAdmin.destroyTable", TableId);
         }
-
-        catch
-
-        {
-
-            /* circuit gone */
-
-        }
-
+        catch (Microsoft.JSInterop.JSDisconnectedException) { }
+        catch (InvalidOperationException) { }
         _interop?.Dispose();
-
     }
-
-
 
     private void ResetEmpty()
-
     {
-
         _editingId = null;
-
         _name = "";
-
         _desc = "";
-
         _usesExt = false;
-
         _conn = "";
-
         _active = true;
-
     }
 
-
-
-    private async Task OpenAddAsync()
-
+    private void OpenAdd()
     {
-
         ResetEmpty();
-
         _modalOpen = true;
-
         _msg = null;
-
-        await Task.CompletedTask;
-
     }
 
-
-
     [JSInvokable]
-
     public async Task OpenEdit(int id)
-
     {
-
-        await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
-
-        var a = await db.Applications.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
-
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var a = await db.Applications.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
         if (a is null)
-
         {
-
             _msg = "Application not found.";
-
+            await InvokeAsync(StateHasChanged);
             return;
-
         }
-
         _editingId = a.Id;
-
         _name = a.Name;
-
         _desc = a.Description;
-
         _usesExt = a.UsesExternalDatabase;
-
         _conn = a.ExternalConnectionStringName;
-
         _active = a.IsActive;
-
         _modalOpen = true;
-
         _msg = null;
-
         await InvokeAsync(StateHasChanged);
-
     }
 
-
-
     [JSInvokable]
-
     public async Task PromptDelete(int id)
-
     {
-
-        await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
-
-        var a = await db.Applications.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
-
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var a = await db.Applications.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
         if (a is null)
-
         {
-
             _msg = "Not found.";
-
             await InvokeAsync(StateHasChanged);
-
             return;
-
         }
-
-        if (!await JS.InvokeAsync<bool>("confirm", $"Delete application \"{a.Name}\"? This removes the application and its links to pages and groups (catalog pages and groups are kept).").ConfigureAwait(false))
-
+        if (!await JS.InvokeAsync<bool>("confirm", $"Delete application \"{a.Name}\"? This removes the application and its links to pages and groups (catalog pages and groups are kept)."))
             return;
 
-        var row = await db.Applications.FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
-
+        var row = await db.Applications.FirstOrDefaultAsync(x => x.Id == id);
         if (row is null)
-
             return;
 
         db.Applications.Remove(row);
-
-        if (!await db.TrySaveChangesAsync(JS).ConfigureAwait(false))
-
+        if (!await db.TrySaveChangesAsync(JS))
             return;
-
         if (_editingId == id)
-
         {
-
             _modalOpen = false;
-
             ResetEmpty();
-
         }
-
         _msg = "Deleted.";
-
         StatusBar.SetMessage("Deleted.");
-
         MenuRefresh.NotifyMenuChanged();
-
-        await JS.InvokeVoidAsync("helpdeskAdmin.reloadTable", TableId).ConfigureAwait(false);
-
+        await JS.InvokeVoidAsync("helpdeskAdmin.reloadTable", TableId);
         await InvokeAsync(StateHasChanged);
-
     }
-
-
 
     private async Task CloseModalAsync()
-
     {
-
-        if (!await JS.InvokeAsync<bool>("confirm", "Close the editor? Unsaved changes will be lost.").ConfigureAwait(false))
-
+        if (!await JS.InvokeAsync<bool>("confirm", "Close the editor? Unsaved changes will be lost."))
             return;
-
         _modalOpen = false;
-
         ResetEmpty();
-
     }
-
-
 
     private async Task ClearFormAsync()
-
     {
-
-        if (!await JS.InvokeAsync<bool>("confirm", "Clear the form? Unsaved changes will be lost.").ConfigureAwait(false))
-
+        if (!await JS.InvokeAsync<bool>("confirm", "Clear the form? Unsaved changes will be lost."))
             return;
-
         if (_editingId is { } eid)
-
         {
-
-            await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
-
-            var a = await db.Applications.AsNoTracking().FirstOrDefaultAsync(x => x.Id == eid).ConfigureAwait(false);
-
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var a = await db.Applications.AsNoTracking().FirstOrDefaultAsync(x => x.Id == eid);
             if (a is not null)
-
                 await OpenEdit(a.Id);
-
             else
-
                 ResetEmpty();
-
         }
-
         else
-
         {
-
             ResetEmpty();
-
         }
-
     }
 
-
-
     private async Task SaveAsync()
-
     {
-
         var confirmMsg = _editingId is null
-
             ? "Create this application?"
-
             : "Save changes to this application?";
-
-        if (!await JS.InvokeAsync<bool>("confirm", confirmMsg).ConfigureAwait(false))
-
+        if (!await JS.InvokeAsync<bool>("confirm", confirmMsg))
             return;
 
         var nameNorm = AdminNameValidation.ToUpperNoSpaces(_name);
-
         var nameErr = AdminNameValidation.ErrorIfEmptyCatalogName(nameNorm, "Name");
-
         if (nameErr is not null)
-
         {
-
             _msg = nameErr;
-
             return;
-
         }
 
         if (!string.IsNullOrWhiteSpace(_conn))
-
         {
-
             var connErr = AdminNameValidation.ErrorIfHasSpaces(_conn, "External connection name");
-
             if (connErr is not null)
-
             {
-
                 _msg = connErr;
-
                 return;
-
             }
-
         }
 
-        await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
+        await using var db = await DbFactory.CreateDbContextAsync();
 
         if (_editingId is { } eid)
-
         {
-
             var a = await db.Applications.FirstOrDefaultAsync(x => x.Id == eid);
-
             if (a is null) { _msg = "Not found."; return; }
-
             a.Name = nameNorm;
-
             a.Description = _desc;
-
             a.UsesExternalDatabase = _usesExt;
-
             a.ExternalConnectionStringName = string.IsNullOrWhiteSpace(_conn) ? null : _conn.Trim();
-
             a.IsActive = _active;
-
             a.UpdatedAt = DateTime.UtcNow;
-
         }
-
         else
-
         {
-
             db.Applications.Add(new DeskApplication
-
             {
-
                 Name = nameNorm,
-
                 Description = _desc,
-
                 UsesExternalDatabase = _usesExt,
-
                 ExternalConnectionStringName = string.IsNullOrWhiteSpace(_conn) ? null : _conn.Trim(),
-
                 IsActive = _active,
-
                 CreatedAt = DateTime.UtcNow
-
             });
-
         }
 
         if (!await db.TrySaveChangesAsync(JS))
-
             return;
-
         _modalOpen = false;
-
         ResetEmpty();
-
         _msg = "Saved.";
-
         StatusBar.SetMessage("Saved.");
-
         MenuRefresh.NotifyMenuChanged();
-
-        await JS.InvokeVoidAsync("helpdeskAdmin.reloadTable", TableId).ConfigureAwait(false);
-
+        await JS.InvokeVoidAsync("helpdeskAdmin.reloadTable", TableId);
     }
 
-
-
     private void OnNameInput(ChangeEventArgs e) =>
-
         _name = AdminNameValidation.ToUpperNoSpaces(e.Value?.ToString());
-
 }

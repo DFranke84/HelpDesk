@@ -176,11 +176,9 @@
         try
         {
             var id = _forgotMode ? "login-loginId-forgot" : "login-loginId";
-            await JS.InvokeVoidAsync("helpdeskUi.focusById", id).ConfigureAwait(false);
+            await JS.InvokeVoidAsync("helpdeskUi.focusById", id);
         }
-        catch
-        {
-            /* prerender / static */
-        }
+        catch (Microsoft.JSInterop.JSDisconnectedException) { }
+        catch (InvalidOperationException) { }
     }
 }

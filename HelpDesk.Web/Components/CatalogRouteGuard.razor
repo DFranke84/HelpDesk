@@ -33,7 +33,7 @@ else
     protected override async Task OnInitializedAsync()
     {
         Nav.LocationChanged += OnLocationChanged;
-        await EvaluateAccessAsync().ConfigureAwait(false);
+        await EvaluateAccessAsync();
     }
 
     private void OnLocationChanged(object? sender, LocationChangedEventArgs e) =>
@@ -43,16 +43,16 @@ else
     {
         _busy = true;
         _denied = false;
-        await InvokeAsync(StateHasChanged).ConfigureAwait(false);
+        await InvokeAsync(StateHasChanged);
 
         try
         {
-            var auth = await AuthState.GetAuthenticationStateAsync().ConfigureAwait(false);
+            var auth = await AuthState.GetAuthenticationStateAsync();
             var user = auth.User;
             if (user.Identity?.IsAuthenticated != true)
             {
                 _busy = false;
-                await InvokeAsync(StateHasChanged).ConfigureAwait(false);
+                await InvokeAsync(StateHasChanged);
                 return;
             }
 
@@ -60,19 +60,19 @@ else
             {
                 _denied = true;
                 _busy = false;
-                await InvokeAsync(StateHasChanged).ConfigureAwait(false);
+                await InvokeAsync(StateHasChanged);
                 return;
             }
 
             var isAdmin = user.IsInRole(nameof(UserRole.Admin));
             var path = Nav.ToBaseRelativePath(Nav.Uri);
-            var allowed = await MenuService.CanAccessCatalogRoutePathAsync(path, userId, isAdmin).ConfigureAwait(false);
+            var allowed = await MenuService.CanAccessCatalogRoutePathAsync(path, userId, isAdmin);
             _denied = !allowed;
         }
         finally
         {
             _busy = false;
-            await InvokeAsync(StateHasChanged).ConfigureAwait(false);
+            await InvokeAsync(StateHasChanged);
         }
     }
 

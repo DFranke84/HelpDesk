@@ -21,7 +21,7 @@
 <div class="hd-admin-page">
     <h1>User groups</h1>
     <div class="hd-admin-toolbar">
-        <button type="button" class="hd-btn primary" @onclick="OpenAddAsync" disabled="@(_users.Count == 0 || _groupOptions.Count == 0)">Add</button>
+        <button type="button" class="hd-btn primary" @onclick="OpenAdd" disabled="@(_users.Count == 0 || _groupOptions.Count == 0)">Add</button>
     </div>
     @if (_users.Count == 0 || _groupOptions.Count == 0)
     {
@@ -105,9 +105,9 @@
 
     private async Task ReloadLookupsAsync()
     {
-        await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
-        _users = await db.Users.AsNoTracking().OrderBy(u => u.LoginId).ToListAsync().ConfigureAwait(false);
-        var groups = await db.Groups.AsNoTracking().OrderBy(g => g.Name).ToListAsync().ConfigureAwait(false);
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _users = await db.Users.AsNoTracking().OrderBy(u => u.LoginId).ToListAsync();
+        var groups = await db.Groups.AsNoTracking().OrderBy(g => g.Name).ToListAsync();
         _groupOptions = groups.Select(g => new GroupOption { Id = g.Id, Label = g.Name }).ToList();
         if (_users.Count > 0)
             _userId = _users[0].Id;
@@ -119,25 +119,26 @@
     {
         if (_users.Count == 0 || _groupOptions.Count == 0)
             return;
-        if (!await JS.InvokeAsync<bool>("helpdeskAdmin.needsInit", TableId).ConfigureAwait(false))
+        if (!await JS.InvokeAsync<bool>("helpdeskAdmin.needsInit", TableId))
             return;
         if (_interop is null)
         {
             _interop = DotNetObjectReference.Create(this);
-            await JS.InvokeVoidAsync("helpdeskAdmin.register", InteropKey, _interop).ConfigureAwait(false);
+            await JS.InvokeVoidAsync("helpdeskAdmin.register", InteropKey, _interop);
         }
         var url = Nav.ToAbsoluteUri("/api/grid/admin/user-groups").ToString();
-        await JS.InvokeVoidAsync("helpdeskAdmin.initUserGroups", TableId, url).ConfigureAwait(false);
+        await JS.InvokeVoidAsync("helpdeskAdmin.initUserGroups", TableId, url);
     }
 
     public async ValueTask DisposeAsync()
     {
         try
         {
-            await JS.InvokeVoidAsync("helpdeskAdmin.unregister", InteropKey).ConfigureAwait(false);
-            await JS.InvokeVoidAsync("helpdeskAdmin.destroyTable", TableId).ConfigureAwait(false);
+            await JS.InvokeVoidAsync("helpdeskAdmin.unregister", InteropKey);
+            await JS.InvokeVoidAsync("helpdeskAdmin.destroyTable", TableId);
         }
-        catch { /* */ }
+        catch (Microsoft.JSInterop.JSDisconnectedException) { }
+        catch (InvalidOperationException) { }
         _interop?.Dispose();
     }
 
@@ -152,7 +153,7 @@
             _groupId = _groupOptions[0].Id;
     }
 
-    private async Task OpenAddAsync()
+    private void OpenAdd()
     {
         if (_users.Count == 0 || _groupOptions.Count == 0)
         {
@@ -162,7 +163,6 @@
         ResetForAdd();
         _modalOpen = true;
         _msg = null;
-        await Task.CompletedTask;
     }
 
     [JSInvokable]
@@ -181,14 +181,14 @@
     [JSInvokable]
     public async Task PromptDelete(int userId, int groupId)
     {
-        if (!await JS.InvokeAsync<bool>("confirm", "Remove this user–group assignment?").ConfigureAwait(false))
+        if (!await JS.InvokeAsync<bool>("confirm", "Remove this user–group assignment?"))
             return;
-        await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
-        var row = await db.UserGroups.FirstOrDefaultAsync(x => x.UserId == userId && x.GroupId == groupId).ConfigureAwait(false);
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var row = await db.UserGroups.FirstOrDefaultAsync(x => x.UserId == userId && x.GroupId == groupId);
         if (row is null)
             return;
         db.UserGroups.Remove(row);
-        if (!await db.TrySaveChangesAsync(JS).ConfigureAwait(false))
+        if (!await db.TrySaveChangesAsync(JS))
             return;
         if (_editing && _origUserId == userId && _origGroupId == groupId)
         {
@@ -198,13 +198,13 @@
         _msg = "Deleted.";
         StatusBar.SetMessage("Deleted.");
         MenuRefresh.NotifyMenuChanged();
-        await JS.InvokeVoidAsync("helpdeskAdmin.reloadTable", TableId).ConfigureAwait(false);
+        await JS.InvokeVoidAsync("helpdeskAdmin.reloadTable", TableId);
         await InvokeAsync(StateHasChanged);
     }
 
     private async Task CloseModalAsync()
     {
-        if (!await JS.InvokeAsync<bool>("confirm", "Close the editor? Unsaved changes will be lost.").ConfigureAwait(false))
+        if (!await JS.InvokeAsync<bool>("confirm", "Close the editor? Unsaved changes will be lost."))
             return;
         _modalOpen = false;
         ResetForAdd();
@@ -212,7 +212,7 @@
 
     private async Task ClearFormAsync()
     {
-        if (!await JS.InvokeAsync<bool>("confirm", "Clear the form? Unsaved changes will be lost.").ConfigureAwait(false))
+        if (!await JS.InvokeAsync<bool>("confirm", "Clear the form? Unsaved changes will be lost."))
             return;
         if (_editing && _origUserId is { } ou && _origGroupId is { } og)
             await OpenEdit(ou, og);
@@ -230,10 +230,10 @@
         }
 
         var confirmMsg = _editing ? "Save changes to this assignment?" : "Create this assignment?";
-        if (!await JS.InvokeAsync<bool>("confirm", confirmMsg).ConfigureAwait(false))
+        if (!await JS.InvokeAsync<bool>("confirm", confirmMsg))
             return;
 
-        await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
+        await using var db = await DbFactory.CreateDbContextAsync();
 
         if (_editing && _origUserId is { } ou && _origGroupId is { } og)
         {
@@ -243,13 +243,13 @@
                 return;
             }
 
-            if (await db.UserGroups.AnyAsync(x => x.UserId == _userId && x.GroupId == _groupId).ConfigureAwait(false))
+            if (await db.UserGroups.AnyAsync(x => x.UserId == _userId && x.GroupId == _groupId))
             {
                 _msg = "That assignment already exists.";
                 return;
             }
 
-            var old = await db.UserGroups.FirstOrDefaultAsync(x => x.UserId == ou && x.GroupId == og).ConfigureAwait(false);
+            var old = await db.UserGroups.FirstOrDefaultAsync(x => x.UserId == ou && x.GroupId == og);
             if (old is null) { _msg = "Original row missing."; return; }
 
             db.UserGroups.Remove(old);
@@ -257,7 +257,7 @@
         }
         else
         {
-            if (await db.UserGroups.AnyAsync(x => x.UserId == _userId && x.GroupId == _groupId).ConfigureAwait(false))
+            if (await db.UserGroups.AnyAsync(x => x.UserId == _userId && x.GroupId == _groupId))
             {
                 _msg = "Already assigned.";
                 return;
@@ -267,14 +267,14 @@
         }
 
         var wasEditing = _editing;
-        if (!await db.TrySaveChangesAsync(JS).ConfigureAwait(false))
+        if (!await db.TrySaveChangesAsync(JS))
             return;
         _modalOpen = false;
         ResetForAdd();
-        await ReloadLookupsAsync().ConfigureAwait(false);
+        await ReloadLookupsAsync();
         _msg = wasEditing ? "Updated." : "Assigned.";
         StatusBar.SetMessage(wasEditing ? "Updated." : "Assigned.");
         MenuRefresh.NotifyMenuChanged();
-        await JS.InvokeVoidAsync("helpdeskAdmin.reloadTable", TableId).ConfigureAwait(false);
+        await JS.InvokeVoidAsync("helpdeskAdmin.reloadTable", TableId);
     }
 }

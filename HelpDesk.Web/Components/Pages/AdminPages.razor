@@ -25,7 +25,7 @@
 <div class="hd-admin-page">
     <h1>Pages</h1>
     <div class="hd-admin-toolbar">
-        <button type="button" class="hd-btn primary" @onclick="OpenAddAsync" disabled="@(_apps.Count == 0)">Add</button>
+        <button type="button" class="hd-btn primary" @onclick="OpenAdd" disabled="@(_apps.Count == 0)">Add</button>
     </div>
 
     @if (_apps.Count == 0)
@@ -99,8 +99,8 @@
 
     private async Task ReloadAppsAsync()
     {
-        await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
-        _apps = await db.Applications.AsNoTracking().OrderBy(a => a.Name).ToListAsync().ConfigureAwait(false);
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _apps = await db.Applications.AsNoTracking().OrderBy(a => a.Name).ToListAsync();
         if (_apps.Count > 0 && _appId == 0)
             _appId = _apps[0].Id;
     }
@@ -109,25 +109,26 @@
     {
         if (_apps.Count == 0)
             return;
-        if (!await JS.InvokeAsync<bool>("helpdeskAdmin.needsInit", TableId).ConfigureAwait(false))
+        if (!await JS.InvokeAsync<bool>("helpdeskAdmin.needsInit", TableId))
             return;
         if (_interop is null)
         {
             _interop = DotNetObjectReference.Create(this);
-            await JS.InvokeVoidAsync("helpdeskAdmin.register", InteropKey, _interop).ConfigureAwait(false);
+            await JS.InvokeVoidAsync("helpdeskAdmin.register", InteropKey, _interop);
         }
         var url = Nav.ToAbsoluteUri("/api/grid/admin/pages").ToString();
-        await JS.InvokeVoidAsync("helpdeskAdmin.initPages", TableId, url).ConfigureAwait(false);
+        await JS.InvokeVoidAsync("helpdeskAdmin.initPages", TableId, url);
     }
 
     public async ValueTask DisposeAsync()
     {
         try
         {
-            await JS.InvokeVoidAsync("helpdeskAdmin.unregister", InteropKey).ConfigureAwait(false);
-            await JS.InvokeVoidAsync("helpdeskAdmin.destroyTable", TableId).ConfigureAwait(false);
+            await JS.InvokeVoidAsync("helpdeskAdmin.unregister", InteropKey);
+            await JS.InvokeVoidAsync("helpdeskAdmin.destroyTable", TableId);
         }
-        catch { /* */ }
+        catch (Microsoft.JSInterop.JSDisconnectedException) { }
+        catch (InvalidOperationException) { }
         _interop?.Dispose();
     }
 
@@ -141,7 +142,7 @@
         _active = true;
     }
 
-    private async Task OpenAddAsync()
+    private void OpenAdd()
     {
         if (_apps.Count == 0)
         {
@@ -151,14 +152,13 @@
         ResetEmpty();
         _modalOpen = true;
         _msg = null;
-        await Task.CompletedTask;
     }
 
     [JSInvokable]
     public async Task OpenEdit(int id)
     {
-        await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
-        var p = await db.Pages.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var p = await db.Pages.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
         if (p is null)
         {
             _msg = "Page not found.";
@@ -179,23 +179,23 @@
     [JSInvokable]
     public async Task PromptDelete(int id)
     {
-        await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
-        var p = await db.Pages.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var p = await db.Pages.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
         if (p is null)
         {
             _msg = "Not found.";
             await InvokeAsync(StateHasChanged);
             return;
         }
-        if (!await JS.InvokeAsync<bool>("confirm", $"Delete page \"{p.Name}\"? Application links are removed with the page.").ConfigureAwait(false))
+        if (!await JS.InvokeAsync<bool>("confirm", $"Delete page \"{p.Name}\"? Application links are removed with the page."))
             return;
 
-        var row = await db.Pages.FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
+        var row = await db.Pages.FirstOrDefaultAsync(x => x.Id == id);
         if (row is null)
             return;
 
         db.Pages.Remove(row);
-        if (!await db.TrySaveChangesAsync(JS).ConfigureAwait(false))
+        if (!await db.TrySaveChangesAsync(JS))
             return;
         if (_editingId == id)
         {
@@ -205,13 +205,13 @@
         _msg = "Deleted.";
         StatusBar.SetMessage("Deleted.");
         MenuRefresh.NotifyMenuChanged();
-        await JS.InvokeVoidAsync("helpdeskAdmin.reloadTable", TableId).ConfigureAwait(false);
+        await JS.InvokeVoidAsync("helpdeskAdmin.reloadTable", TableId);
         await InvokeAsync(StateHasChanged);
     }
 
     private async Task CloseModalAsync()
     {
-        if (!await JS.InvokeAsync<bool>("confirm", "Close the editor? Unsaved changes will be lost.").ConfigureAwait(false))
+        if (!await JS.InvokeAsync<bool>("confirm", "Close the editor? Unsaved changes will be lost."))
             return;
         _modalOpen = false;
         ResetEmpty();
@@ -219,12 +219,12 @@
 
     private async Task ClearFormAsync()
     {
-        if (!await JS.InvokeAsync<bool>("confirm", "Clear the form? Unsaved changes will be lost.").ConfigureAwait(false))
+        if (!await JS.InvokeAsync<bool>("confirm", "Clear the form? Unsaved changes will be lost."))
             return;
         if (_editingId is { } pid)
         {
-            await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
-            var p = await db.Pages.AsNoTracking().FirstOrDefaultAsync(x => x.Id == pid).ConfigureAwait(false);
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var p = await db.Pages.AsNoTracking().FirstOrDefaultAsync(x => x.Id == pid);
             if (p is not null)
                 await OpenEdit(p.Id);
             else
@@ -239,7 +239,7 @@
     private async Task SaveAsync()
     {
         var confirmMsg = _editingId is null ? "Create this page?" : "Save changes to this page?";
-        if (!await JS.InvokeAsync<bool>("confirm", confirmMsg).ConfigureAwait(false))
+        if (!await JS.InvokeAsync<bool>("confirm", confirmMsg))
             return;
 
         var nameNorm = AdminNameValidation.ToUpperNoSpaces(_name);
@@ -257,11 +257,11 @@
             return;
         }
 
-        await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
+        await using var db = await DbFactory.CreateDbContextAsync();
 
         if (_editingId is { } pid)
         {
-            var p = await db.Pages.FirstOrDefaultAsync(x => x.Id == pid).ConfigureAwait(false);
+            var p = await db.Pages.FirstOrDefaultAsync(x => x.Id == pid);
             if (p is null)
             {
                 _msg = "Not found.";
@@ -290,7 +290,7 @@
             });
         }
 
-        if (!await db.TrySaveChangesAsync(JS).ConfigureAwait(false))
+        if (!await db.TrySaveChangesAsync(JS))
             return;
         _modalOpen = false;
         ResetEmpty();
@@ -298,7 +298,7 @@
         _msg = "Saved.";
         StatusBar.SetMessage("Saved.");
         MenuRefresh.NotifyMenuChanged();
-        await JS.InvokeVoidAsync("helpdeskAdmin.reloadTable", TableId).ConfigureAwait(false);
+        await JS.InvokeVoidAsync("helpdeskAdmin.reloadTable", TableId);
     }
 
     private void OnNameInput(ChangeEventArgs e) =>

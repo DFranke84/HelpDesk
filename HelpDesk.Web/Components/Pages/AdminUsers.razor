@@ -29,7 +29,7 @@
 <div class="hd-admin-page">
     <h1>Users</h1>
     <div class="hd-admin-toolbar">
-        <button type="button" class="hd-btn primary" @onclick="OpenAddAsync">Add</button>
+        <button type="button" class="hd-btn primary" @onclick="OpenAdd">Add</button>
     </div>
     <table id="tbl-admin-users" class="hd-dt cell-border compact stripe" style="width:100%"></table>
     @if (!string.IsNullOrEmpty(_msg) && !_modalOpen)
@@ -118,22 +118,23 @@
     {
         if (!firstRender)
             return;
-        if (!await JS.InvokeAsync<bool>("helpdeskAdmin.needsInit", TableId).ConfigureAwait(false))
+        if (!await JS.InvokeAsync<bool>("helpdeskAdmin.needsInit", TableId))
             return;
         _interop = DotNetObjectReference.Create(this);
-        await JS.InvokeVoidAsync("helpdeskAdmin.register", InteropKey, _interop).ConfigureAwait(false);
+        await JS.InvokeVoidAsync("helpdeskAdmin.register", InteropKey, _interop);
         var url = Nav.ToAbsoluteUri("/api/grid/admin/users").ToString();
-        await JS.InvokeVoidAsync("helpdeskAdmin.initUsers", TableId, url).ConfigureAwait(false);
+        await JS.InvokeVoidAsync("helpdeskAdmin.initUsers", TableId, url);
     }
 
     public async ValueTask DisposeAsync()
     {
         try
         {
-            await JS.InvokeVoidAsync("helpdeskAdmin.unregister", InteropKey).ConfigureAwait(false);
-            await JS.InvokeVoidAsync("helpdeskAdmin.destroyTable", TableId).ConfigureAwait(false);
+            await JS.InvokeVoidAsync("helpdeskAdmin.unregister", InteropKey);
+            await JS.InvokeVoidAsync("helpdeskAdmin.destroyTable", TableId);
         }
-        catch { /* */ }
+        catch (Microsoft.JSInterop.JSDisconnectedException) { }
+        catch (InvalidOperationException) { }
         _interop?.Dispose();
     }
 
@@ -151,19 +152,18 @@
         _active = true;
     }
 
-    private async Task OpenAddAsync()
+    private void OpenAdd()
     {
         ResetEmpty();
         _modalOpen = true;
         _msg = null;
-        await Task.CompletedTask;
     }
 
     [JSInvokable]
     public async Task OpenEdit(int id)
     {
-        await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
-        var u = await db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var u = await db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
         if (u is null)
         {
             _msg = "User not found.";
@@ -189,7 +189,7 @@
     public async Task PromptDelete(int id)
     {
         _msg = null;
-        var state = await AuthState.GetAuthenticationStateAsync().ConfigureAwait(false);
+        var state = await AuthState.GetAuthenticationStateAsync();
         var selfId = state.User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (int.TryParse(selfId, out var sid) && sid == id)
         {
@@ -198,8 +198,8 @@
             return;
         }
 
-        await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
-        var u = await db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var u = await db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
         if (u is null)
         {
             _msg = "Not found.";
@@ -207,15 +207,15 @@
             return;
         }
 
-        if (!await JS.InvokeAsync<bool>("confirm", $"Delete user \"{u.LoginId}\"?").ConfigureAwait(false))
+        if (!await JS.InvokeAsync<bool>("confirm", $"Delete user \"{u.LoginId}\"?"))
             return;
 
-        var row = await db.Users.FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
+        var row = await db.Users.FirstOrDefaultAsync(x => x.Id == id);
         if (row is null)
             return;
 
         db.Users.Remove(row);
-        if (!await db.TrySaveChangesAsync(JS).ConfigureAwait(false))
+        if (!await db.TrySaveChangesAsync(JS))
             return;
         if (_editingUserId == id)
         {
@@ -224,13 +224,13 @@
         }
         _msg = "Deleted.";
         StatusBar.SetMessage("Deleted.");
-        await JS.InvokeVoidAsync("helpdeskAdmin.reloadTable", TableId).ConfigureAwait(false);
+        await JS.InvokeVoidAsync("helpdeskAdmin.reloadTable", TableId);
         await InvokeAsync(StateHasChanged);
     }
 
     private async Task CloseModalAsync()
     {
-        if (!await JS.InvokeAsync<bool>("confirm", "Close the editor? Unsaved changes will be lost.").ConfigureAwait(false))
+        if (!await JS.InvokeAsync<bool>("confirm", "Close the editor? Unsaved changes will be lost."))
             return;
         _modalOpen = false;
         ResetEmpty();
@@ -238,12 +238,12 @@
 
     private async Task ClearFormAsync()
     {
-        if (!await JS.InvokeAsync<bool>("confirm", "Clear the form? Unsaved changes will be lost.").ConfigureAwait(false))
+        if (!await JS.InvokeAsync<bool>("confirm", "Clear the form? Unsaved changes will be lost."))
             return;
         if (_editingUserId is { } uid)
         {
-            await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
-            var u = await db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == uid).ConfigureAwait(false);
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var u = await db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == uid);
             if (u is not null)
                 await OpenEdit(u.Id);
             else
@@ -272,13 +272,13 @@
         }
 
         var confirmMsg = _editingUserId is null ? "Create this user?" : "Save changes to this user?";
-        if (!await JS.InvokeAsync<bool>("confirm", confirmMsg).ConfigureAwait(false))
+        if (!await JS.InvokeAsync<bool>("confirm", confirmMsg))
             return;
 
         var fn = string.IsNullOrWhiteSpace(_firstName) ? null : _firstName.Trim();
         var ln = string.IsNullOrWhiteSpace(_lastName) ? null : _lastName.Trim();
 
-        await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
+        await using var db = await DbFactory.CreateDbContextAsync();
 
         if (_editingUserId is { } id)
         {
@@ -329,7 +329,7 @@
         ResetEmpty();
         _msg = "Saved.";
         StatusBar.SetMessage("Saved.");
-        await JS.InvokeVoidAsync("helpdeskAdmin.reloadTable", TableId).ConfigureAwait(false);
+        await JS.InvokeVoidAsync("helpdeskAdmin.reloadTable", TableId);
     }
 
     private void OnLoginIdInput(ChangeEventArgs e) =>

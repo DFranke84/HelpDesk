@@ -173,8 +173,8 @@ public class AccountController : ControllerBase
     [HttpPost("set-password")]
     public async Task<IActionResult> SetPassword([FromBody] SetPasswordRequest req, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(req.NewPassword) || req.NewPassword.Length < 6)
-            return BadRequest(new { error = "New password must be at least 6 characters." });
+        if (string.IsNullOrWhiteSpace(req.NewPassword) || req.NewPassword.Length < PasswordPolicy.MinLength)
+            return BadRequest(new { error = PasswordPolicy.MinLengthMessage });
 
         var id = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (!int.TryParse(id, out var userId))
@@ -416,7 +416,7 @@ public class AccountController : ControllerBase
         if (string.IsNullOrWhiteSpace(password) || string.IsNullOrWhiteSpace(confirmPassword) || password != confirmPassword)
             return Redirect(QueryHelpers.AddQueryString(back, "resetErr", "mismatch"));
 
-        if (password.Length < 6)
+        if (password.Length < PasswordPolicy.MinLength)
             return Redirect(QueryHelpers.AddQueryString(back, "resetErr", "short"));
 
         var (ok, _) = await _passwordReset.ResetPasswordAsync(t, password, ct).ConfigureAwait(false);

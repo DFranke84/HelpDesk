@@ -31,19 +31,20 @@
     {
         if (!firstRender)
             return;
-        if (!await JS.InvokeAsync<bool>("helpdeskAdmin.needsInit", TableId).ConfigureAwait(false))
+        if (!await JS.InvokeAsync<bool>("helpdeskAdmin.needsInit", TableId))
             return;
         var url = BuildApiUrl();
-        await JS.InvokeVoidAsync("helpdeskAdmin.initChangeHistory", TableId, url).ConfigureAwait(false);
+        await JS.InvokeVoidAsync("helpdeskAdmin.initChangeHistory", TableId, url);
     }
 
     public async ValueTask DisposeAsync()
     {
         try
         {
-            await JS.InvokeVoidAsync("helpdeskAdmin.destroyTable", TableId).ConfigureAwait(false);
+            await JS.InvokeVoidAsync("helpdeskAdmin.destroyTable", TableId);
         }
-        catch { /* */ }
+        catch (Microsoft.JSInterop.JSDisconnectedException) { }
+        catch (InvalidOperationException) { }
     }
 
     private string BuildApiUrl()
@@ -55,6 +56,6 @@
     private async Task ApplyFilterAsync()
     {
         var url = BuildApiUrl();
-        await JS.InvokeVoidAsync("helpdeskAdmin.setAjaxUrlAndReload", TableId, url).ConfigureAwait(false);
+        await JS.InvokeVoidAsync("helpdeskAdmin.setAjaxUrlAndReload", TableId, url);
     }
 }

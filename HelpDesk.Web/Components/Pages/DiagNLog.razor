@@ -80,10 +80,8 @@
             var url = Nav.ToAbsoluteUri("/api/grid/nlog" + query).ToString();
             await JS.InvokeVoidAsync("helpdeskDiag.initNLog", "tbl-nlog", url);
         }
-        catch
-        {
-            /* ignored */
-        }
+        catch (Microsoft.JSInterop.JSDisconnectedException) { }
+        catch (InvalidOperationException) { }
     }
 
     public async ValueTask DisposeAsync()
@@ -92,10 +90,8 @@
         {
             await JS.InvokeVoidAsync("helpdeskDiag.destroyFull", "tbl-nlog");
         }
-        catch
-        {
-            /* ignored */
-        }
+        catch (Microsoft.JSInterop.JSDisconnectedException) { }
+        catch (InvalidOperationException) { }
     }
 }
 

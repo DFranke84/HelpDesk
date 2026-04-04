@@ -45,7 +45,7 @@ window.helpdeskIdle = (function () {
         intervalId = null;
       }
       events.forEach(function (ev) {
-        document.removeEventListener(ev, bump);
+        document.removeEventListener(ev, bump, { passive: true });
       });
     }
   };

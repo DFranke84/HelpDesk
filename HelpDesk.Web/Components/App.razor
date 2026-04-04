@@ -8,15 +8,18 @@
     <link rel="stylesheet" href="css/helpdesk.css" />
     <link rel="stylesheet" href="app.css" />
     <link rel="stylesheet" href="HelpDesk.Web.styles.css" />
-    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css" />
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css"
+          integrity="sha256-d/193zMcyZUwruClurTkAXN/g5rqawa2b9+czcJFqjY=" crossorigin="anonymous" />
     <HeadOutlet />
 </head>
 
 <body>
     @* Static SSR does not run @onclick or IJSRuntime; Interactive Server is required for login and the rest of the UI. *@
     <Routes @rendermode="InteractiveServer" />
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-    <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"
+            integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
+    <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"
+            integrity="sha256-pZRjIZFSxrz4U7n5WSczYWyE5hjY+E9QZuFwRYslIBQ=" crossorigin="anonymous"></script>
     <script src="js/auth.js"></script>
     <script src="js/idle.js"></script>
     <script src="js/datatablesInterop.js"></script>

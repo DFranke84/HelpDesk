@@ -1,9 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
+    <!-- TargetFramework, Nullable, ImplicitUsings inherited from Directory.Build.props -->
     <RootNamespace>HelpDesk.Models</RootNamespace>
     <UserSecretsId>HelpDesk-Migrations-8f3c2a1b-4d5e-6f70-8192-abcdef012345</UserSecretsId>
   </PropertyGroup>

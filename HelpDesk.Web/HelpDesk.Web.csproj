@@ -1,9 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- TargetFramework, Nullable, ImplicitUsings inherited from Directory.Build.props -->
     <UserSecretsId>HelpDesk-Web-8f3c2a1b-4d5e-6f70-8192-abcdef012345</UserSecretsId>
   </PropertyGroup>
 

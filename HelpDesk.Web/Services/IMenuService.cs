@@ -2,10 +2,13 @@ using HelpDesk.Models;
 
 namespace HelpDesk.Web.Services;
 
+/// <summary>Provides menu data (applications and pages) filtered by the current user's group memberships.</summary>
 public interface IMenuService
 {
+    /// <summary>Returns the active applications the user may see (all for admins; group-linked for regular users).</summary>
     Task<List<DeskApplication>> GetAccessibleApplicationsAsync(int userId, bool isAdmin, CancellationToken ct = default);
 
+    /// <summary>Returns the active pages within <paramref name="appId"/> the user may access.</summary>
     Task<List<DeskPage>> GetAccessiblePagesAsync(int appId, int userId, bool isAdmin, CancellationToken ct = default);
 
     /// <summary>Returns all accessible pages grouped by application ID in a single query.</summary>

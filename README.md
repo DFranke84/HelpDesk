@@ -142,6 +142,42 @@ HelpDesk.Logging/
 └── *.cs                 # Correlation, observability, event log abstractions
 ```
 
+## Deployment
+
+### IIS hosting
+
+1. Publish the application:
+   ```
+   dotnet publish HelpDesk.Web -c Release -o ./publish
+   ```
+2. Create an IIS site pointing to the `publish` folder.
+3. Install the [ASP.NET Core Hosting Bundle](https://dotnet.microsoft.com/download/dotnet/8.0) on the server.
+4. Set the application pool to **No Managed Code**.
+5. For Windows Negotiate authentication, enable **Windows Authentication** on the IIS site and disable **Anonymous Authentication**.
+6. Configure environment-specific settings via environment variables or a production `appsettings.Production.json` (do **not** copy development secrets).
+
+### Environment variables
+
+Sensitive values should be set as environment variables rather than stored in configuration files:
+
+| Variable | Maps to |
+|----------|---------|
+| `ConnectionStrings__HelpDesk` | `ConnectionStrings:HelpDesk` |
+| `ConnectionStrings__Books` | `ConnectionStrings:Books` |
+| `Smtp__Direct__User` | `Smtp:Direct:User` |
+| `Smtp__Direct__Password` | `Smtp:Direct:Password` |
+| `App__BaseUrl` | `App:BaseUrl` |
+
+### Production checklist
+
+- [ ] Rotate any credentials that were committed to source control during development
+- [ ] Set `AllowedHosts` to the production hostname(s)
+- [ ] Set `App:BaseUrl` to the production URL (used in password reset emails)
+- [ ] Confirm SMTP settings and test email delivery
+- [ ] Verify the initial admin password is changed on first login
+- [ ] Enable HTTPS and set `CookieSecurePolicy.Always` (already the default)
+- [ ] Review NLog targets — ensure file paths and database connection strings are valid
+
 ## Configuration reference
 
 Key settings in `appsettings.json` under `App`:
