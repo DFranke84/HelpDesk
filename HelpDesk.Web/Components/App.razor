@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <link rel="stylesheet" href="css/helpdesk.css" />
+    <link rel="stylesheet" href="app.css" />
+    <link rel="stylesheet" href="HelpDesk.Web.styles.css" />
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css" />
+    <HeadOutlet />
+</head>
+
+<body>
+    @* Static SSR does not run @onclick or IJSRuntime; Interactive Server is required for login and the rest of the UI. *@
+    <Routes @rendermode="InteractiveServer" />
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/idle.js"></script>
+    <script src="js/datatablesInterop.js"></script>
+    <script src="js/diagGrids.js"></script>
+    <script src="js/adminGrids.js"></script>
+    <script src="js/modalEnhancements.js"></script>
+    <script src="js/booksCatalogGrids.js"></script>
+    <script src="_framework/blazor.web.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,407 @@
+@using System.Security.Claims
+
+@using HelpDesk.Models
+
+@using HelpDesk.Web.Services
+
+@implements IDisposable
+
+@inject IMenuService MenuService
+
+@inject IMenuRefreshNotifier MenuRefresh
+
+@inject AuthenticationStateProvider AuthState
+
+@inject NavigationManager Nav
+
+
+
+<AuthorizeView Context="navAuth">
+
+    <Authorized>
+
+@if (_mustChangePassword)
+{
+    <div class="hd-nav">
+        <p class="muted" style="padding: 0.35rem 0.25rem;">Set your new password in the main area before using the rest of the app.</p>
+    </div>
+}
+else
+{
+
+<div class="hd-nav">
+
+    <button class="hd-sidebar-toggle" type="button" @onclick="Toggle">@(Collapsed ? "»" : "«")</button>
+
+    @if (!Collapsed)
+
+    {
+
+        <nav class="hd-nav-tree">
+
+            <a class="hd-nav-link" href="/">Dashboard</a>
+
+            <AuthorizeView Roles="Admin" Context="adminAuth">
+
+                <Authorized>
+
+                    <details class="hd-nav-collapsible">
+
+                        <summary class="hd-nav-section-summary">Administration</summary>
+
+                        <div class="hd-nav-section-body">
+
+                            <a class="hd-nav-link" href="/admin/application-groups">Application groups</a>
+
+                            <a class="hd-nav-link" href="/admin/applications">Applications</a>
+
+                            <a class="hd-nav-link" href="/admin/change-history">Change history</a>
+
+                            <a class="hd-nav-link" href="/admin/groups">Groups</a>
+
+                            <a class="hd-nav-link" href="/admin/pages">Pages</a>
+
+                            <a class="hd-nav-link" href="/admin/user-groups">User groups</a>
+
+                            <a class="hd-nav-link" href="/admin/users">Users</a>
+
+                        </div>
+
+                    </details>
+
+                </Authorized>
+
+            </AuthorizeView>
+
+            <details class="hd-nav-collapsible">
+
+                <summary class="hd-nav-section-summary">Applications</summary>
+
+                <div class="hd-nav-section-body">
+
+                    @if (_apps is null)
+
+                    {
+
+                        <div class="muted">Loading…</div>
+
+                    }
+
+                    else
+
+                    {
+                        @if (_apps.Count == 0)
+                        {
+                            <div class="muted">No applications yet.</div>
+                        }
+                        else
+                        {
+
+                        @foreach (var app in _apps)
+
+                        {
+
+                            var open = _open.Contains(app.Id);
+
+                            <div class="hd-app-node">
+
+                                <button type="button" class="hd-app-toggle" @onclick="() => ToggleApp(app.Id)">
+
+                                    @(open ? "▼" : "▶") @app.Name
+
+                                </button>
+
+                                @if (open)
+
+                                {
+
+                                    <div class="hd-page-list">
+
+                                        @if (_pages.TryGetValue(app.Id, out var pages))
+
+                                        {
+
+                                            @foreach (var p in pages)
+
+                                            {
+
+                                                <a class="hd-nav-link" href="@GetPageHref(app.Id, p.Id)">@p.Name</a>
+
+                                            }
+
+                                        }
+
+                                    </div>
+
+                                }
+
+                            </div>
+
+                        }
+                        }
+
+                    }
+
+                </div>
+
+            </details>
+
+            <details class="hd-nav-collapsible">
+
+                <summary class="hd-nav-section-summary">Diagnostics</summary>
+
+                <div class="hd-nav-section-body">
+
+                    <a class="hd-nav-link" href="/diag/nlog">NLog</a>
+
+                </div>
+
+            </details>
+
+        </nav>
+
+    }
+
+</div>
+
+}
+
+    </Authorized>
+
+    <NotAuthorized>
+
+        <div class="hd-nav hd-nav--anonymous" aria-hidden="true"></div>
+
+    </NotAuthorized>
+
+</AuthorizeView>
+
+
+
+@code {
+
+    private bool Collapsed = false;
+
+    private bool _mustChangePassword;
+
+    private List<DeskApplication>? _apps;
+
+    private readonly Dictionary<int, List<DeskPage>> _pages = new();
+
+    private readonly HashSet<int> _open = new();
+
+
+
+    protected override async Task OnInitializedAsync()
+
+    {
+
+        Nav.LocationChanged += OnLocationChanged;
+
+        MenuRefresh.MenuChanged += OnMenuChanged;
+
+        await LoadMenuAsync();
+
+    }
+
+
+
+    private async void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+
+    {
+
+        try
+
+        {
+
+            await InvokeAsync(async () =>
+
+            {
+
+                await LoadMenuAsync();
+
+                StateHasChanged();
+
+            });
+
+        }
+
+        catch
+
+        {
+
+            // Circuit may be disposed
+
+        }
+
+    }
+
+
+
+    private async void OnMenuChanged()
+
+    {
+
+        try
+
+        {
+
+            await InvokeAsync(async () =>
+
+            {
+
+                await LoadMenuAsync();
+
+                StateHasChanged();
+
+            });
+
+        }
+
+        catch
+
+        {
+
+            // Circuit may be disposed
+
+        }
+
+    }
+
+
+
+    private async Task LoadMenuAsync()
+
+    {
+
+        var state = await AuthState.GetAuthenticationStateAsync();
+
+        var user = state.User;
+
+        _mustChangePassword = false;
+
+        if (user.Identity?.IsAuthenticated != true)
+
+        {
+
+            _apps = new List<DeskApplication>();
+
+            _pages.Clear();
+
+            _open.Clear();
+
+            return;
+
+        }
+
+        if (user.HasClaim(AuthClaims.MustChangePassword, "true"))
+
+        {
+
+            _mustChangePassword = true;
+
+            _apps = new List<DeskApplication>();
+
+            _pages.Clear();
+
+            _open.Clear();
+
+            return;
+
+        }
+
+
+
+        var id = user.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!int.TryParse(id, out var userId))
+
+        {
+
+            _apps = new List<DeskApplication>();
+
+            _pages.Clear();
+
+            _open.Clear();
+
+            return;
+
+        }
+
+
+
+        var isAdmin = user.IsInRole(nameof(UserRole.Admin));
+
+        _apps = await MenuService.GetAccessibleApplicationsAsync(userId, isAdmin);
+
+
+
+        var validIds = new HashSet<int>(_apps.Select(a => a.Id));
+
+        foreach (var key in _pages.Keys.ToList())
+
+        {
+
+            if (!validIds.Contains(key))
+
+                _pages.Remove(key);
+
+        }
+
+        foreach (var oid in _open.ToList())
+
+        {
+
+            if (!validIds.Contains(oid))
+
+                _open.Remove(oid);
+
+        }
+
+
+
+        foreach (var app in _apps)
+
+        {
+
+            var pages = await MenuService.GetAccessiblePagesAsync(app.Id, userId, isAdmin);
+
+            _pages[app.Id] = pages;
+
+        }
+
+    }
+
+
+
+    public void Dispose()
+
+    {
+
+        Nav.LocationChanged -= OnLocationChanged;
+
+        MenuRefresh.MenuChanged -= OnMenuChanged;
+
+    }
+
+
+
+    private void Toggle() => Collapsed = !Collapsed;
+
+
+
+    private void ToggleApp(int id)
+
+    {
+
+        if (!_open.Add(id))
+
+            _open.Remove(id);
+
+    }
+
+
+
+    private static string GetPageHref(int appId, int pageId) => $"/app/{appId}/page/{pageId}";
+
+}

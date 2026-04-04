@@ -1,0 +1,25 @@
+---
+description: XML Flowerbox documentation for C# methods.
+globs: ["**/*.cs"]
+---
+
+# C# XML Flowerbox
+Whenever generating, refactoring, or documenting C# methods, always use the following "Flowerbox" XML documentation format.
+
+## Requirements
+- Include summary, param, returns
+- Action-Oriented Summaries: Use concise, sentence-case descriptions (e.g., "Process Incoming Claim").
+- Strict Type Referencing: For every parameter that is a complex object or custom class, you **must** include a `<see cref="TypeName" />` tag within the `<param>` description.
+- Triple-Slash Consistency: Ensure all lines start with `///` and are properly indented with the method signature.
+- Return Descriptions: Always include a `<returns>` tag describing the output object.
+
+## Template
+
+```csharp
+/// <summary>
+/// [Action description]
+/// </summary>
+/// <param name="[name]">Description <see cref="[TypeName]"/></param>
+/// <returns>Description</returns>
+```
+

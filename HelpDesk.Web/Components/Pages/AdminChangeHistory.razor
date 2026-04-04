@@ -1,0 +1,60 @@
+@page "/admin/change-history"
+
+@attribute [Authorize(Roles = "Admin")]
+
+@implements IAsyncDisposable
+
+@inject IJSRuntime JS
+
+@inject NavigationManager Nav
+
+<PageTitle>Change history</PageTitle>
+
+<div class="hd-admin-page">
+    <h1>Entity change history</h1>
+    <div class="hd-admin-toolbar hd-admin-toolbar--filter-end">
+        <div class="form-row" style="margin:0;flex:1;min-width:200px;max-width:420px;">
+            <label>Entity type</label>
+            <input class="hd-input" placeholder="User, DeskApplication, …" @bind="_filterType" />
+        </div>
+        <button type="button" class="hd-btn primary" @onclick="ApplyFilterAsync">Apply filter</button>
+    </div>
+    <table id="tbl-admin-change-history" class="hd-dt cell-border compact stripe" style="width:100%"></table>
+</div>
+
+@code {
+    private const string TableId = "tbl-admin-change-history";
+
+    private string? _filterType;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+        if (!await JS.InvokeAsync<bool>("helpdeskAdmin.needsInit", TableId).ConfigureAwait(false))
+            return;
+        var url = BuildApiUrl();
+        await JS.InvokeVoidAsync("helpdeskAdmin.initChangeHistory", TableId, url).ConfigureAwait(false);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("helpdeskAdmin.destroyTable", TableId).ConfigureAwait(false);
+        }
+        catch { /* */ }
+    }
+
+    private string BuildApiUrl()
+    {
+        var qs = string.IsNullOrWhiteSpace(_filterType) ? "" : $"?filterType={Uri.EscapeDataString(_filterType.Trim())}";
+        return Nav.ToAbsoluteUri("/api/grid/admin/change-history" + qs).ToString();
+    }
+
+    private async Task ApplyFilterAsync()
+    {
+        var url = BuildApiUrl();
+        await JS.InvokeVoidAsync("helpdeskAdmin.setAjaxUrlAndReload", TableId, url).ConfigureAwait(false);
+    }
+}

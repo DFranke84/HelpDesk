@@ -1,0 +1,18 @@
+---
+description: Logging and infrastructure rules.
+globs: ["**/*.cs", "**/appsettings.json"]
+---
+
+# Logging & Infrastructure
+
+## Environment
+- .NET 8+
+- Visual Studio 2022+
+
+## Logging
+- Use NLog
+- Configure in appsettings.json
+
+## Practices
+- Log meaningful events
+- Avoid noise

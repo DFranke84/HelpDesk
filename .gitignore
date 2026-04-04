@@ -1,0 +1,42 @@
+# Build Folders
+bin/
+obj/
+Debug/
+Release/
+
+# Visual Studio temporary files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+
+# Auto-generated files
+Generated/
+
+# NuGet packages
+*.nupkg
+packages/
+.nuget/
+
+# VS Code workspace settings
+.vscode/
+
+# Rider settings
+.idea/
+
+# Test results
+TestResults/
+*.trx
+
+# Publish output
+publish/
+
+# DotCover, ReSharper, Rider, other tool caches
+*.dotCover
+*.ReSharper
+*.sln.iml
+
+# OS-specific files
+Thumbs.db
+.DS_Store

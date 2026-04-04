@@ -1,0 +1,92 @@
+@page "/app/{AppId:int}/page/{PageId:int}"
+
+@using System.Security.Claims
+
+@using HelpDesk.Models
+
+@using HelpDesk.Models.Data
+
+@inject HelpDeskDbContext Db
+@inject NavigationManager Nav
+@inject AuthenticationStateProvider AuthState
+@inject IMenuService MenuService
+
+<PageTitle>@(_title)</PageTitle>
+
+@if (_navigatingAway)
+{
+    <p class="muted">Opening…</p>
+}
+else if (_accessDenied)
+{
+    <h1>Access denied</h1>
+    <p class="muted">You do not have permission to open this page. Use the menu to see the pages available to you.</p>
+}
+else if (_page is null)
+{
+    <p>Page not found.</p>
+}
+else
+{
+    <h1>@_page.Name</h1>
+
+    <p class="muted">Application ID: @AppId · Route: <code>@_page.Route</code></p>
+
+    <div class="hd-card">
+        <p>This is a placeholder for help content. Replace with dynamic content or embedded tools for this page.</p>
+    </div>
+}
+
+@code {
+    [Parameter] public int AppId { get; set; }
+    [Parameter] public int PageId { get; set; }
+
+    private DeskPage? _page;
+    private bool _navigatingAway;
+    private bool _accessDenied;
+    private string _title = "Page";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _navigatingAway = false;
+        _accessDenied = false;
+        _page = await Db.Pages.AsNoTracking()
+            .Where(p => p.Id == PageId && p.DeskApplicationId == AppId)
+            .FirstOrDefaultAsync()
+            .ConfigureAwait(false);
+
+        if (_page is null)
+        {
+            _title = "Page";
+            return;
+        }
+
+        _title = _page.Name;
+
+        var authState = await AuthState.GetAuthenticationStateAsync().ConfigureAwait(false);
+        var user = authState.User;
+        if (user.Identity?.IsAuthenticated != true
+            || !int.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+        {
+            _accessDenied = true;
+            return;
+        }
+
+        var isAdmin = user.IsInRole(nameof(UserRole.Admin));
+        var allowed = await MenuService.GetAccessiblePagesAsync(AppId, userId, isAdmin).ConfigureAwait(false);
+        if (!allowed.Exists(p => p.Id == PageId))
+        {
+            _accessDenied = true;
+            return;
+        }
+
+        var route = _page.Route?.Trim();
+        if (!string.IsNullOrEmpty(route)
+            && route.StartsWith("/", StringComparison.Ordinal)
+            && !route.StartsWith("/app/", StringComparison.OrdinalIgnoreCase))
+        {
+            _navigatingAway = true;
+            Nav.NavigateTo(route, replace: true);
+        }
+    }
+}

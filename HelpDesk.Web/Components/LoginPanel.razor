@@ -1,0 +1,185 @@
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<div class="login-panel">
+    <h2>@(_forgotMode ? "Forgot password" : "Sign in")</h2>
+    @if (!_forgotMode)
+    {
+        <p class="muted">Use your help desk account. Domain users with a matching profile are signed in automatically.</p>
+    }
+
+    @if (!string.IsNullOrEmpty(_queryError))
+    {
+        <div class="hd-alert">@_queryError</div>
+    }
+    @if (!string.IsNullOrEmpty(_resetSentMsg))
+    {
+        <div class="hd-alert hd-alert--success">@_resetSentMsg</div>
+    }
+    @if (!string.IsNullOrEmpty(_forgotSentMsg))
+    {
+        <div class="hd-alert hd-alert--success">@_forgotSentMsg</div>
+    }
+    @if (!string.IsNullOrEmpty(_forgotFormError))
+    {
+        <div class="hd-alert">@_forgotFormError</div>
+    }
+
+    @if (!_forgotMode)
+    {
+        <form method="post" action="/api/account/login-form" class="login-form" data-enhance="false">
+            <input type="hidden" name="returnUrl" value="@_returnUrl" />
+            <div class="form-row">
+                <label for="login-loginId">Login ID</label>
+                <input id="login-loginId" class="hd-input" name="loginId" autocomplete="username" required autofocus
+                       oninput="this.value=this.value.replace(/\s/g,'').toUpperCase()" />
+            </div>
+            <div class="form-row">
+                <label for="login-password">Password</label>
+                <div class="hd-password-field">
+                    <input id="login-password" class="hd-input hd-password-field__input" name="password" type="password" autocomplete="current-password" required />
+                    <button type="button" class="hd-password-field__toggle hd-password-field__toggle--css" aria-label="Show password" aria-pressed="false" tabindex="-1"></button>
+                </div>
+            </div>
+            <button type="submit" class="hd-btn primary">Sign in</button>
+        </form>
+        <p class="login-panel__sub"><a class="hd-linkbtn" href="@ForgotPasswordHref">Forgot password?</a></p>
+    }
+    else
+    {
+        <p class="muted">Enter your login ID. If the account exists and has an email on file, we will send a link that is valid for 10 minutes.</p>
+        <form method="post" action="/api/account/request-password-reset-by-login-form" class="login-form" data-enhance="false">
+            <input type="hidden" name="redirectAfter" value="@RedirectAfterForForm" />
+            <div class="form-row">
+                <label for="login-loginId-forgot">Login ID</label>
+                <input id="login-loginId-forgot" class="hd-input" name="loginId" autocomplete="username" required autofocus
+                       oninput="this.value=this.value.replace(/\s/g,'').toUpperCase()" />
+            </div>
+            <button type="submit" class="hd-btn primary">Send reset link</button>
+        </form>
+        <p class="login-panel__sub"><a class="hd-linkbtn" href="@SignInHref">Back to sign in</a></p>
+    }
+</div>
+
+@code {
+    private bool _forgotMode;
+    private string? _queryError;
+    private string? _resetSentMsg;
+    private string? _forgotSentMsg;
+    private string? _forgotFormError;
+    private string _returnUrl = "/";
+
+    private string? _lastUriForFocus;
+
+    private string RelativeUri => Nav.ToBaseRelativePath(Nav.Uri);
+
+    /// <summary>Current path + query, with forgot-* keys removed (used for form POST redirect target).</summary>
+    private string RedirectAfterForForm => StripForgotQueryKeys(RelativeUri);
+
+    private string ForgotPasswordHref => QueryHelpers.AddQueryString(StripForgotQueryKeys(RelativeUri), "forgot", "1");
+
+    private string SignInHref => StripForgotQueryKeys(RelativeUri);
+
+    private static string StripForgotQueryKeys(string relativePathAndQuery)
+    {
+        var q = relativePathAndQuery.IndexOf('?', StringComparison.Ordinal);
+        if (q < 0)
+            return relativePathAndQuery;
+        var path = relativePathAndQuery[..q];
+        var parsed = QueryHelpers.ParseQuery(relativePathAndQuery[q..]);
+        var d = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var kv in parsed)
+        {
+            if (string.Equals(kv.Key, "forgot", StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (string.Equals(kv.Key, "forgotSent", StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (string.Equals(kv.Key, "forgotError", StringComparison.OrdinalIgnoreCase))
+                continue;
+            d[kv.Key] = kv.Value.ToString();
+        }
+
+        if (d.Count == 0)
+            return path.Length == 0 ? "/" : path;
+        return QueryHelpers.AddQueryString(path, d);
+    }
+
+    protected override void OnParametersSet()
+    {
+        var uri = Nav.ToAbsoluteUri(Nav.Uri);
+        var q = QueryHelpers.ParseQuery(uri.Query);
+
+        if (q.TryGetValue("forgotSent", out var fs) &&
+            (fs.ToString().Equals("1", StringComparison.OrdinalIgnoreCase) || fs.ToString().Equals("true", StringComparison.OrdinalIgnoreCase)))
+        {
+            _forgotSentMsg = "If that account exists and has an email on file, a reset link has been sent.";
+            _forgotMode = false;
+        }
+        else
+        {
+            _forgotSentMsg = null;
+            _forgotMode = q.TryGetValue("forgot", out var f) &&
+                (f.ToString().Equals("1", StringComparison.OrdinalIgnoreCase) || f.ToString().Equals("true", StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (q.TryGetValue("forgotError", out var fe) && fe.ToString().Equals("required", StringComparison.OrdinalIgnoreCase))
+            _forgotFormError = "Enter your login ID.";
+        else
+            _forgotFormError = null;
+
+        if (q.TryGetValue("loginError", out var err))
+        {
+            _queryError = err.ToString() switch
+            {
+                "invalid" => "Invalid login ID or password.",
+                "required" => "Enter login ID and password.",
+                _ => "Sign-in was not completed."
+            };
+        }
+        else
+            _queryError = null;
+
+        if (q.TryGetValue("reset", out var reset) && reset.ToString().Equals("sent", StringComparison.OrdinalIgnoreCase))
+            _resetSentMsg = "Your password was updated. Sign in with your new password.";
+        else
+            _resetSentMsg = null;
+
+        if (uri.AbsolutePath.Equals("/login", StringComparison.OrdinalIgnoreCase))
+        {
+            if (q.TryGetValue("returnUrl", out var ru) && !string.IsNullOrWhiteSpace(ru.ToString()))
+            {
+                var v = ru.ToString();
+                _returnUrl = v.StartsWith('/') && !v.StartsWith("//", StringComparison.Ordinal) ? v : "/";
+            }
+            else
+                _returnUrl = "/";
+        }
+        else
+        {
+            var rel = uri.PathAndQuery;
+            if (string.IsNullOrEmpty(rel) || rel == "/")
+                _returnUrl = "/";
+            else if (rel.StartsWith('/') && !rel.StartsWith("//", StringComparison.Ordinal))
+                _returnUrl = rel;
+            else
+                _returnUrl = "/";
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        var uri = Nav.Uri;
+        if (!firstRender && string.Equals(_lastUriForFocus, uri, StringComparison.Ordinal))
+            return;
+        _lastUriForFocus = uri;
+        try
+        {
+            var id = _forgotMode ? "login-loginId-forgot" : "login-loginId";
+            await JS.InvokeVoidAsync("helpdeskUi.focusById", id).ConfigureAwait(false);
+        }
+        catch
+        {
+            /* prerender / static */
+        }
+    }
+}

@@ -1,0 +1,279 @@
+@page "/admin/application-groups"
+
+@attribute [Authorize(Roles = "Admin")]
+
+@implements IAsyncDisposable
+
+@using HelpDesk.Models
+
+@inject IDbContextFactory<HelpDesk.Models.Data.HelpDeskDbContext> DbFactory
+
+@inject IMenuRefreshNotifier MenuRefresh
+
+@inject IStatusBarService StatusBar
+
+@inject IJSRuntime JS
+
+@inject NavigationManager Nav
+
+<PageTitle>Application groups</PageTitle>
+
+<div class="hd-admin-page">
+    <h1>Application groups</h1>
+    <p class="muted">Link applications to groups (who may access an application’s pages). Groups themselves are edited on <a href="/admin/groups">Groups</a>.</p>
+    <div class="hd-admin-toolbar">
+        <button type="button" class="hd-btn primary" @onclick="OpenAddAsync" disabled="@(_applications.Count == 0 || _groups.Count == 0)">Add</button>
+    </div>
+    @if (_applications.Count == 0 || _groups.Count == 0)
+    {
+        <div class="hd-card" style="margin-top:0.75rem;">
+            <strong>Setup required.</strong>
+            <div class="muted">Add at least one application and one group first.</div>
+        </div>
+    }
+    else
+    {
+        <table id="tbl-admin-application-groups" class="hd-dt cell-border compact stripe" style="width:100%"></table>
+    }
+    @if (!string.IsNullOrEmpty(_msg) && !_modalOpen)
+    {
+        <p class="muted">@_msg</p>
+    }
+</div>
+
+@if (_modalOpen)
+{
+    <div class="hd-modal-backdrop">
+        <div class="hd-modal-scrim" @onclick="CloseModalAsync"></div>
+        <div class="hd-modal" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
+            @if (!string.IsNullOrEmpty(_msg))
+            {
+                <p class="hd-modal-banner" role="alert">@_msg</p>
+            }
+            <h3 class="hd-modal-title">@(_editing ? "Edit link" : "Add link")</h3>
+            <div class="form-row">
+                <label>Application</label>
+                <select class="hd-input" @bind="_applicationId">
+                    @foreach (var a in _applications)
+                    {
+                        <option value="@a.Id">@a.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="form-row">
+                <label>Group</label>
+                <select class="hd-input" @bind="_groupId">
+                    @foreach (var g in _groups)
+                    {
+                        <option value="@g.Id">@g.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="hd-modal-actions">
+                <button type="button" class="hd-btn primary" @onclick="SaveAsync">@(_editing ? "Save" : "Add")</button>
+                @if (!_editing)
+                {
+                    <button type="button" class="hd-btn" @onclick="ClearFormAsync">Clear</button>
+                }
+                <button type="button" class="hd-btn" @onclick="CloseModalAsync">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private const string TableId = "tbl-admin-application-groups";
+    private const string InteropKey = "applicationGroups";
+
+    private DotNetObjectReference<AdminApplicationGroups>? _interop;
+    private List<DeskApplication> _applications = new();
+    private List<DeskGroup> _groups = new();
+    private int _applicationId;
+    private int _groupId;
+    private int? _origApplicationId;
+    private int? _origGroupId;
+    private bool _editing;
+    private bool _modalOpen;
+    private string? _msg;
+
+    protected override async Task OnInitializedAsync() => await ReloadLookupsAsync();
+
+    private async Task ReloadLookupsAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
+        _applications = await db.Applications.AsNoTracking().OrderBy(a => a.Name).ToListAsync().ConfigureAwait(false);
+        _groups = await db.Groups.AsNoTracking().OrderBy(g => g.Name).ToListAsync().ConfigureAwait(false);
+        if (_applications.Count > 0)
+            _applicationId = _applications[0].Id;
+        if (_groups.Count > 0)
+            _groupId = _groups[0].Id;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_applications.Count == 0 || _groups.Count == 0)
+            return;
+        if (!await JS.InvokeAsync<bool>("helpdeskAdmin.needsInit", TableId).ConfigureAwait(false))
+            return;
+        if (_interop is null)
+        {
+            _interop = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("helpdeskAdmin.register", InteropKey, _interop).ConfigureAwait(false);
+        }
+        var url = Nav.ToAbsoluteUri("/api/grid/admin/application-groups").ToString();
+        await JS.InvokeVoidAsync("helpdeskAdmin.initApplicationGroups", TableId, url).ConfigureAwait(false);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("helpdeskAdmin.unregister", InteropKey).ConfigureAwait(false);
+            await JS.InvokeVoidAsync("helpdeskAdmin.destroyTable", TableId).ConfigureAwait(false);
+        }
+        catch { /* */ }
+        _interop?.Dispose();
+    }
+
+    private void ResetForAdd()
+    {
+        _editing = false;
+        _origApplicationId = null;
+        _origGroupId = null;
+        if (_applications.Count > 0)
+            _applicationId = _applications[0].Id;
+        if (_groups.Count > 0)
+            _groupId = _groups[0].Id;
+    }
+
+    private async Task OpenAddAsync()
+    {
+        if (_applications.Count == 0 || _groups.Count == 0)
+        {
+            _msg = "Add at least one application and one group first.";
+            return;
+        }
+        ResetForAdd();
+        _modalOpen = true;
+        _msg = null;
+        await Task.CompletedTask;
+    }
+
+    [JSInvokable]
+    public async Task OpenEdit(int deskApplicationId, int deskGroupId)
+    {
+        _editing = true;
+        _origApplicationId = deskApplicationId;
+        _origGroupId = deskGroupId;
+        _applicationId = deskApplicationId;
+        _groupId = deskGroupId;
+        _modalOpen = true;
+        _msg = null;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public async Task PromptDelete(int deskApplicationId, int deskGroupId)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", "Remove this application–group link?").ConfigureAwait(false))
+            return;
+        await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
+        var entity = await db.DeskApplicationGroups.FirstOrDefaultAsync(
+            x => x.DeskApplicationId == deskApplicationId && x.DeskGroupId == deskGroupId).ConfigureAwait(false);
+        if (entity is null)
+            return;
+        db.DeskApplicationGroups.Remove(entity);
+        if (!await db.TrySaveChangesAsync(JS).ConfigureAwait(false))
+            return;
+        if (_editing && _origApplicationId == deskApplicationId && _origGroupId == deskGroupId)
+        {
+            _modalOpen = false;
+            ResetForAdd();
+        }
+        _msg = "Deleted.";
+        StatusBar.SetMessage("Deleted.");
+        MenuRefresh.NotifyMenuChanged();
+        await JS.InvokeVoidAsync("helpdeskAdmin.reloadTable", TableId).ConfigureAwait(false);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task CloseModalAsync()
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", "Close the editor? Unsaved changes will be lost.").ConfigureAwait(false))
+            return;
+        _modalOpen = false;
+        ResetForAdd();
+    }
+
+    private async Task ClearFormAsync()
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", "Clear the form? Unsaved changes will be lost.").ConfigureAwait(false))
+            return;
+        if (_editing && _origApplicationId is { } oa && _origGroupId is { } og)
+            await OpenEdit(oa, og);
+        else
+            ResetForAdd();
+    }
+
+    private async Task SaveAsync()
+    {
+        _msg = null;
+        if (_applications.Count == 0 || _groups.Count == 0)
+        {
+            _msg = "Add at least one application and one group first.";
+            return;
+        }
+
+        var confirmMsg = _editing ? "Save changes to this link?" : "Create this link?";
+        if (!await JS.InvokeAsync<bool>("confirm", confirmMsg).ConfigureAwait(false))
+            return;
+
+        await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
+
+        if (_editing && _origApplicationId is { } oa && _origGroupId is { } og)
+        {
+            if (oa == _applicationId && og == _groupId)
+            {
+                _msg = "No changes.";
+                return;
+            }
+
+            if (await db.DeskApplicationGroups.AnyAsync(x => x.DeskApplicationId == _applicationId && x.DeskGroupId == _groupId).ConfigureAwait(false))
+            {
+                _msg = "That link already exists.";
+                return;
+            }
+
+            var old = await db.DeskApplicationGroups.FirstOrDefaultAsync(x => x.DeskApplicationId == oa && x.DeskGroupId == og).ConfigureAwait(false);
+            if (old is null)
+            {
+                _msg = "Original row missing.";
+                return;
+            }
+
+            db.DeskApplicationGroups.Remove(old);
+            db.DeskApplicationGroups.Add(new DeskApplicationGroup { DeskApplicationId = _applicationId, DeskGroupId = _groupId });
+        }
+        else
+        {
+            if (await db.DeskApplicationGroups.AnyAsync(x => x.DeskApplicationId == _applicationId && x.DeskGroupId == _groupId).ConfigureAwait(false))
+            {
+                _msg = "That link already exists.";
+                return;
+            }
+
+            db.DeskApplicationGroups.Add(new DeskApplicationGroup { DeskApplicationId = _applicationId, DeskGroupId = _groupId });
+        }
+
+        var wasEditing = _editing;
+        if (!await db.TrySaveChangesAsync(JS).ConfigureAwait(false))
+            return;
+        _modalOpen = false;
+        ResetForAdd();
+        await ReloadLookupsAsync();
+        _msg = wasEditing ? "Updated." : "Added.";
+        StatusBar.SetMessage(wasEditing ? "Updated." : "Added.");
+        MenuRefresh.NotifyMenuChanged();
+        await JS.InvokeVoidAsync("helpdeskAdmin.reloadTable", TableId).ConfigureAwait(false);
+    }
+}

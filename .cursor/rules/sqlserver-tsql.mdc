@@ -1,0 +1,97 @@
+---
+description: SQL Server and T-SQL standards for performance, readability, and maintainability.
+globs: ["**/*.sql"]
+---
+
+# SQL Server & T-SQL Standards
+
+## General Principles
+- Prioritize readability over brevity
+- Write deterministic, predictable queries
+- Avoid overly complex queries
+
+## Formatting
+- Use uppercase for SQL keywords
+- Align clauses for readability
+
+Example:
+SELECT Column1, Column2
+FROM TableName
+WHERE IsActive = 1
+ORDER BY CreatedDate DESC;
+
+## Naming Conventions
+- Use PascalCase for:
+  - Tables
+  - Columns
+  - Stored Procedures
+- Use meaningful names (no abbreviations unless standard)
+
+## Aliases
+- Use short, meaningful aliases
+- Avoid single-letter aliases unless obvious
+
+## Joins
+- Always use explicit JOIN syntax (no implicit joins)
+- Clearly define join conditions
+
+## Filtering
+- Always specify columns in SELECT (avoid SELECT *)
+- Filter as early as possible
+
+## Performance
+- Avoid:
+  - SELECT *
+  - Cursors (unless absolutely necessary)
+  - Scalar functions in WHERE clauses
+- Use indexes effectively
+- Analyze execution plans
+
+## Pagination
+- Use OFFSET/FETCH for paging
+
+## Transactions
+- Keep transactions short
+- Use TRY/CATCH for error handling
+
+## Error Handling
+- Use TRY...CATCH blocks
+- Return meaningful error messages
+
+## Stored Procedures
+- Use for complex operations or performance-critical logic
+- Keep them focused and single-purpose
+
+## Parameterization
+- Always use parameters (prevent SQL injection)
+- Avoid dynamic SQL unless necessary
+
+## Temp Tables vs CTEs
+- Use CTEs for readability
+- Use temp tables when:
+  - Reuse is needed
+  - Performance requires it
+
+## Index Awareness
+- Ensure queries align with indexes
+- Avoid functions on indexed columns in WHERE
+
+## NULL Handling
+- Be explicit with NULL checks
+- Use IS NULL / IS NOT NULL (not = NULL)
+
+## Dates
+- Use ISO formats (YYYY-MM-DD)
+- Avoid ambiguous date formats
+
+## EF Core Considerations
+- Write SQL that EF can translate efficiently
+- Avoid patterns that force client-side evaluation
+
+## Security
+- Never concatenate SQL strings with user input
+- Use parameterized queries or stored procedures
+
+## Maintainability
+- Break complex queries into steps
+- Use comments only to explain WHY, not WHAT

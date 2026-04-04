@@ -1,0 +1,306 @@
+@page "/admin/pages"
+
+@attribute [Authorize(Roles = "Admin")]
+
+@implements IAsyncDisposable
+
+@using HelpDesk.Models
+
+@using HelpDesk.Web.Validation
+
+@using Microsoft.AspNetCore.Components
+
+@inject IDbContextFactory<HelpDesk.Models.Data.HelpDeskDbContext> DbFactory
+
+@inject IMenuRefreshNotifier MenuRefresh
+
+@inject IStatusBarService StatusBar
+
+@inject IJSRuntime JS
+
+@inject NavigationManager Nav
+
+<PageTitle>Pages</PageTitle>
+
+<div class="hd-admin-page">
+    <h1>Pages</h1>
+    <div class="hd-admin-toolbar">
+        <button type="button" class="hd-btn primary" @onclick="OpenAddAsync" disabled="@(_apps.Count == 0)">Add</button>
+    </div>
+
+    @if (_apps.Count == 0)
+    {
+        <div class="hd-card" style="margin-top:0.75rem;">
+            <strong>No applications yet.</strong>
+            <div class="muted">Add an application first (Administration → Applications). Pages require an application.</div>
+        </div>
+    }
+    else
+    {
+        <table id="tbl-admin-pages" class="hd-dt cell-border compact stripe" style="width:100%"></table>
+    }
+    @if (!string.IsNullOrEmpty(_msg) && !_modalOpen)
+    {
+        <p class="muted">@_msg</p>
+    }
+</div>
+
+@if (_modalOpen)
+{
+    <div class="hd-modal-backdrop">
+        <div class="hd-modal-scrim" @onclick="CloseModalAsync"></div>
+        <div class="hd-modal" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
+            @if (!string.IsNullOrEmpty(_msg))
+            {
+                <p class="hd-modal-banner" role="alert">@_msg</p>
+            }
+            <h3 class="hd-modal-title">@(_editingId is null ? "Add page" : "Edit page")</h3>
+            <div class="form-row">
+                <label>Application</label>
+                <select class="hd-input" @bind="_appId">
+                    @foreach (var a in _apps)
+                    {
+                        <option value="@a.Id">@a.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="form-row"><label>Name</label><input class="hd-input" value="@_name" @oninput="OnNameInput" autocomplete="off" /></div>
+            <div class="form-row"><label>Route</label><input class="hd-input" @bind="_route" /></div>
+            <div class="form-row"><label>Display order</label><input class="hd-input" @bind="_order" /></div>
+            <label><input type="checkbox" @bind="_active" /> Active</label>
+            <div class="hd-modal-actions">
+                <button type="button" class="hd-btn primary" @onclick="SaveAsync">Save</button>
+                @if (_editingId is null)
+                {
+                    <button type="button" class="hd-btn" @onclick="ClearFormAsync">Clear</button>
+                }
+                <button type="button" class="hd-btn" @onclick="CloseModalAsync">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private const string TableId = "tbl-admin-pages";
+    private const string InteropKey = "pages";
+
+    private DotNetObjectReference<AdminPages>? _interop;
+    private List<DeskApplication> _apps = new();
+    private int? _editingId;
+    private bool _modalOpen;
+    private int _appId;
+    private string _name = "";
+    private string _route = "";
+    private int _order;
+    private bool _active = true;
+    private string? _msg;
+
+    protected override async Task OnInitializedAsync() => await ReloadAppsAsync();
+
+    private async Task ReloadAppsAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
+        _apps = await db.Applications.AsNoTracking().OrderBy(a => a.Name).ToListAsync().ConfigureAwait(false);
+        if (_apps.Count > 0 && _appId == 0)
+            _appId = _apps[0].Id;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_apps.Count == 0)
+            return;
+        if (!await JS.InvokeAsync<bool>("helpdeskAdmin.needsInit", TableId).ConfigureAwait(false))
+            return;
+        if (_interop is null)
+        {
+            _interop = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("helpdeskAdmin.register", InteropKey, _interop).ConfigureAwait(false);
+        }
+        var url = Nav.ToAbsoluteUri("/api/grid/admin/pages").ToString();
+        await JS.InvokeVoidAsync("helpdeskAdmin.initPages", TableId, url).ConfigureAwait(false);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("helpdeskAdmin.unregister", InteropKey).ConfigureAwait(false);
+            await JS.InvokeVoidAsync("helpdeskAdmin.destroyTable", TableId).ConfigureAwait(false);
+        }
+        catch { /* */ }
+        _interop?.Dispose();
+    }
+
+    private void ResetEmpty()
+    {
+        _editingId = null;
+        _appId = _apps.Count > 0 ? _apps[0].Id : 0;
+        _name = "";
+        _route = "";
+        _order = 0;
+        _active = true;
+    }
+
+    private async Task OpenAddAsync()
+    {
+        if (_apps.Count == 0)
+        {
+            _msg = "Add an application first.";
+            return;
+        }
+        ResetEmpty();
+        _modalOpen = true;
+        _msg = null;
+        await Task.CompletedTask;
+    }
+
+    [JSInvokable]
+    public async Task OpenEdit(int id)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
+        var p = await db.Pages.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
+        if (p is null)
+        {
+            _msg = "Page not found.";
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+        _editingId = p.Id;
+        _appId = p.DeskApplicationId;
+        _name = p.Name;
+        _route = p.Route;
+        _order = p.DisplayOrder;
+        _active = p.IsActive;
+        _modalOpen = true;
+        _msg = null;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public async Task PromptDelete(int id)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
+        var p = await db.Pages.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
+        if (p is null)
+        {
+            _msg = "Not found.";
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+        if (!await JS.InvokeAsync<bool>("confirm", $"Delete page \"{p.Name}\"? Application links are removed with the page.").ConfigureAwait(false))
+            return;
+
+        var row = await db.Pages.FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
+        if (row is null)
+            return;
+
+        db.Pages.Remove(row);
+        if (!await db.TrySaveChangesAsync(JS).ConfigureAwait(false))
+            return;
+        if (_editingId == id)
+        {
+            _modalOpen = false;
+            ResetEmpty();
+        }
+        _msg = "Deleted.";
+        StatusBar.SetMessage("Deleted.");
+        MenuRefresh.NotifyMenuChanged();
+        await JS.InvokeVoidAsync("helpdeskAdmin.reloadTable", TableId).ConfigureAwait(false);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task CloseModalAsync()
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", "Close the editor? Unsaved changes will be lost.").ConfigureAwait(false))
+            return;
+        _modalOpen = false;
+        ResetEmpty();
+    }
+
+    private async Task ClearFormAsync()
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", "Clear the form? Unsaved changes will be lost.").ConfigureAwait(false))
+            return;
+        if (_editingId is { } pid)
+        {
+            await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
+            var p = await db.Pages.AsNoTracking().FirstOrDefaultAsync(x => x.Id == pid).ConfigureAwait(false);
+            if (p is not null)
+                await OpenEdit(p.Id);
+            else
+                ResetEmpty();
+        }
+        else
+        {
+            ResetEmpty();
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        var confirmMsg = _editingId is null ? "Create this page?" : "Save changes to this page?";
+        if (!await JS.InvokeAsync<bool>("confirm", confirmMsg).ConfigureAwait(false))
+            return;
+
+        var nameNorm = AdminNameValidation.ToUpperNoSpaces(_name);
+        var nameErr = AdminNameValidation.ErrorIfEmptyCatalogName(nameNorm, "Name");
+        if (nameErr is not null)
+        {
+            _msg = nameErr;
+            return;
+        }
+
+        var routeErr = AdminNameValidation.ErrorIfHasSpaces(_route, "Route");
+        if (routeErr is not null)
+        {
+            _msg = routeErr;
+            return;
+        }
+
+        await using var db = await DbFactory.CreateDbContextAsync().ConfigureAwait(false);
+
+        if (_editingId is { } pid)
+        {
+            var p = await db.Pages.FirstOrDefaultAsync(x => x.Id == pid).ConfigureAwait(false);
+            if (p is null)
+            {
+                _msg = "Not found.";
+                return;
+            }
+
+            if (_appId == 0) { _msg = "Select an application."; return; }
+            p.DeskApplicationId = _appId;
+            p.Name = nameNorm;
+            p.Route = _route.Trim();
+            p.DisplayOrder = _order;
+            p.IsActive = _active;
+            p.UpdatedAt = DateTime.UtcNow;
+        }
+        else
+        {
+            if (_appId == 0) { _msg = "Select an application."; return; }
+            db.Pages.Add(new DeskPage
+            {
+                DeskApplicationId = _appId,
+                Name = nameNorm,
+                Route = _route.Trim(),
+                DisplayOrder = _order,
+                IsActive = _active,
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+
+        if (!await db.TrySaveChangesAsync(JS).ConfigureAwait(false))
+            return;
+        _modalOpen = false;
+        ResetEmpty();
+        await ReloadAppsAsync();
+        _msg = "Saved.";
+        StatusBar.SetMessage("Saved.");
+        MenuRefresh.NotifyMenuChanged();
+        await JS.InvokeVoidAsync("helpdeskAdmin.reloadTable", TableId).ConfigureAwait(false);
+    }
+
+    private void OnNameInput(ChangeEventArgs e) =>
+        _name = AdminNameValidation.ToUpperNoSpaces(e.Value?.ToString());
+}

@@ -1,0 +1,100 @@
+@page "/diag/nlog"
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+<PageTitle>NLog</PageTitle>
+<h1>NLog</h1>
+
+<div class="hd-nlog-filters">
+    <div class="hd-admin-toolbar">
+        <div>
+            <label class="muted">Levels</label><br />
+            <select class="hd-input" style="min-width:220px" @bind="_level">
+                <option value="">All</option>
+                @foreach (var l in _levelOptions)
+                {
+                    <option value="@l">@l</option>
+                }
+            </select>
+        </div>
+        <div>
+            <label class="muted">Activity categories</label><br />
+            <select class="hd-input" style="min-width:220px" @bind="_category">
+                <option value="">All</option>
+                @foreach (var c in _categoryOptions)
+                {
+                    <option value="@c">@c</option>
+                }
+            </select>
+            <div class="muted" style="margin-top:6px">Tip: add extra categories below (comma separated).</div>
+            <input class="hd-input" placeholder="Other categories (optional)" @bind="_otherCategories" style="min-width:220px;margin-top:6px" />
+        </div>
+        <div class="hd-nlog-filters__apply">
+            <button type="button" class="hd-btn primary" @onclick="ReloadAsync">Apply filters</button>
+        </div>
+    </div>
+</div>
+
+<table id="tbl-nlog" class="hd-dt cell-border compact stripe" style="width:100%"></table>
+
+@code {
+    private readonly string[] _levelOptions = ["Trace", "Debug", "Info", "Warn", "Error", "Fatal"];
+    private readonly string[] _categoryOptions = ["Audit", "Error", "Log"];
+
+    private string? _level;
+    private string? _category;
+    private string? _otherCategories;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        try
+        {
+            var qs = new Dictionary<string, string?>();
+            var levels = !string.IsNullOrWhiteSpace(_level) ? _level : null;
+
+            var catList = new List<string>();
+            if (!string.IsNullOrWhiteSpace(_category))
+                catList.Add(_category);
+            if (!string.IsNullOrWhiteSpace(_otherCategories))
+                catList.AddRange(_otherCategories.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+            var cats = catList.Count > 0 ? string.Join(",", catList.Distinct(StringComparer.OrdinalIgnoreCase)) : null;
+
+            if (!string.IsNullOrWhiteSpace(levels))
+                qs["levels"] = levels;
+            if (!string.IsNullOrWhiteSpace(cats))
+                qs["activityCategories"] = cats;
+
+            var query = qs.Count == 0
+                ? ""
+                : "?" + string.Join("&", qs.Select(kv => $"{Uri.EscapeDataString(kv.Key)}={Uri.EscapeDataString(kv.Value ?? "")}"));
+
+            var url = Nav.ToAbsoluteUri("/api/grid/nlog" + query).ToString();
+            await JS.InvokeVoidAsync("helpdeskDiag.initNLog", "tbl-nlog", url);
+        }
+        catch
+        {
+            /* ignored */
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("helpdeskDiag.destroyFull", "tbl-nlog");
+        }
+        catch
+        {
+            /* ignored */
+        }
+    }
+}
+

@@ -1,0 +1,34 @@
+@*
+  ---------------------------------------------------------------------------
+  Admin page template — copy this file to create a new routable admin page.
+  This route is intentionally omitted from NavMenu. Open directly, e.g.:
+  https://localhost:5001/admin/dev/page-template
+  ---------------------------------------------------------------------------
+  Checklist when copying:
+  - Rename file and set a unique @page route (e.g. @page "/admin/your-feature").
+  - Adjust [Authorize(Roles = "Admin")] if a different policy is required.
+  - Replace placeholder content; wire DbContext, services, and modals as needed.
+  - For list + edit/delete UIs, use jQuery DataTables: API in
+    AdminCatalogGridController (or a dedicated controller), empty
+    &lt;table&gt; with id + classes &quot;hd-dt cell-border compact stripe&quot;.
+    In OnAfterRenderAsync, do not gate on firstRender only — if the grid is inside
+    @if (data ready), call helpdeskAdmin.needsInit then register (once) + init*
+    so the table initializes after async lookups render. JSInvokable handlers
+    for row actions; IAsyncDisposable to destroyTable + unregister.
+    See .cursor/rules/helpdesk-jquery-datatables-grids.mdc.
+  ---------------------------------------------------------------------------
+*@
+
+@page "/admin/dev/page-template"
+
+@attribute [Authorize(Roles = "Admin")]
+
+<PageTitle>Page template</PageTitle>
+
+<div class="hd-admin-page">
+    <h1>New admin page</h1>
+    <p class="muted">This template is not linked from the sidebar. Duplicate the file and change the <code>@@page</code> route to use it.</p>
+</div>
+
+@code {
+}

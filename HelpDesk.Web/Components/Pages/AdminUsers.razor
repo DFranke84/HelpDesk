@@ -1,0 +1,332 @@
+@page "/admin/users"
+
+@attribute [Authorize(Roles = "Admin")]
+
+@implements IAsyncDisposable
+
+@using System.Security.Claims
+
+@using HelpDesk.Models
+
+@using HelpDesk.Web.Validation
+
+@using Microsoft.AspNetCore.Components
+
+@inject HelpDesk.Models.Data.HelpDeskDbContext Db
+
+@inject PasswordHasher<User> Hasher
+
+@inject IStatusBarService StatusBar
+
+@inject IJSRuntime JS
+
+@inject AuthenticationStateProvider AuthState
+
+@inject NavigationManager Nav
+
+<PageTitle>Users</PageTitle>
+
+<div class="hd-admin-page">
+    <h1>Users</h1>
+    <div class="hd-admin-toolbar">
+        <button type="button" class="hd-btn primary" @onclick="OpenAddAsync">Add</button>
+    </div>
+    <table id="tbl-admin-users" class="hd-dt cell-border compact stripe" style="width:100%"></table>
+    @if (!string.IsNullOrEmpty(_msg) && !_modalOpen)
+    {
+        <p class="muted">@_msg</p>
+    }
+</div>
+
+@if (_modalOpen)
+{
+    <div class="hd-modal-backdrop">
+        <div class="hd-modal-scrim" @onclick="CloseModalAsync"></div>
+        <div class="hd-modal" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
+            @if (!string.IsNullOrEmpty(_msg))
+            {
+                <p class="hd-modal-banner" role="alert">@_msg</p>
+            }
+            <h3 class="hd-modal-title">@(_editingUserId is null ? "Add user" : "Edit user")</h3>
+            <div class="form-row">
+                <label>First name</label>
+                <input class="hd-input" @bind="_firstName" />
+            </div>
+            <div class="form-row">
+                <label>Last name</label>
+                <input class="hd-input" @bind="_lastName" />
+            </div>
+            <div class="form-row">
+                <label>Login ID</label>
+                <input class="hd-input" value="@_loginId" @oninput="OnLoginIdInput" autocomplete="off" />
+            </div>
+            <div class="form-row">
+                <label>Email</label>
+                <input class="hd-input" @bind="_email" />
+            </div>
+            <div class="form-row">
+                <label for="admin-user-password">Password (new users only)</label>
+                <PasswordField Id="admin-user-password" Autocomplete="new-password" @bind-Value="_password" />
+            </div>
+            <div class="form-row">
+                <label>Domain SAM (DOMAIN\user)</label>
+                <input class="hd-input" @bind="_sam" />
+            </div>
+            <div class="form-row">
+                <label>Domain UPN</label>
+                <input class="hd-input" @bind="_upn" />
+            </div>
+            <div class="form-row">
+                <label>Role</label>
+                <select class="hd-input" @bind="_role">
+                    <option value="@UserRole.User">User</option>
+                    <option value="@UserRole.Admin">Admin</option>
+                </select>
+            </div>
+            <label><input type="checkbox" @bind="_active" /> Active</label>
+            <div class="hd-modal-actions">
+                <button type="button" class="hd-btn primary" @onclick="SaveAsync">Save</button>
+                @if (_editingUserId is null)
+                {
+                    <button type="button" class="hd-btn" @onclick="ClearFormAsync">Clear</button>
+                }
+                <button type="button" class="hd-btn" @onclick="CloseModalAsync">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private const string TableId = "tbl-admin-users";
+    private const string InteropKey = "users";
+
+    private DotNetObjectReference<AdminUsers>? _interop;
+    private int? _editingUserId;
+    private bool _modalOpen;
+    private string _firstName = "";
+    private string _lastName = "";
+    private string _loginId = "";
+    private string? _email;
+    private string? _password;
+    private string? _sam;
+    private string? _upn;
+    private UserRole _role;
+    private bool _active = true;
+    private string? _msg;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+        if (!await JS.InvokeAsync<bool>("helpdeskAdmin.needsInit", TableId).ConfigureAwait(false))
+            return;
+        _interop = DotNetObjectReference.Create(this);
+        await JS.InvokeVoidAsync("helpdeskAdmin.register", InteropKey, _interop).ConfigureAwait(false);
+        var url = Nav.ToAbsoluteUri("/api/grid/admin/users").ToString();
+        await JS.InvokeVoidAsync("helpdeskAdmin.initUsers", TableId, url).ConfigureAwait(false);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("helpdeskAdmin.unregister", InteropKey).ConfigureAwait(false);
+            await JS.InvokeVoidAsync("helpdeskAdmin.destroyTable", TableId).ConfigureAwait(false);
+        }
+        catch { /* */ }
+        _interop?.Dispose();
+    }
+
+    private void ResetEmpty()
+    {
+        _editingUserId = null;
+        _firstName = "";
+        _lastName = "";
+        _loginId = "";
+        _email = "";
+        _password = "";
+        _sam = "";
+        _upn = "";
+        _role = UserRole.User;
+        _active = true;
+    }
+
+    private async Task OpenAddAsync()
+    {
+        ResetEmpty();
+        _modalOpen = true;
+        _msg = null;
+        await Task.CompletedTask;
+    }
+
+    [JSInvokable]
+    public async Task OpenEdit(int id)
+    {
+        var u = await Db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
+        if (u is null)
+        {
+            _msg = "User not found.";
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+        _editingUserId = u.Id;
+        _firstName = u.FirstName ?? "";
+        _lastName = u.LastName ?? "";
+        _loginId = u.LoginId;
+        _email = u.Email;
+        _password = "";
+        _sam = u.DomainSamAccountName;
+        _upn = u.DomainUserPrincipalName;
+        _role = u.Role;
+        _active = u.IsActive;
+        _modalOpen = true;
+        _msg = null;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public async Task PromptDelete(int id)
+    {
+        _msg = null;
+        var state = await AuthState.GetAuthenticationStateAsync().ConfigureAwait(false);
+        var selfId = state.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (int.TryParse(selfId, out var sid) && sid == id)
+        {
+            _msg = "You cannot delete your own account.";
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        var u = await Db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
+        if (u is null)
+        {
+            _msg = "Not found.";
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        if (!await JS.InvokeAsync<bool>("confirm", $"Delete user \"{u.LoginId}\"?").ConfigureAwait(false))
+            return;
+
+        var row = await Db.Users.FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
+        if (row is null)
+            return;
+
+        Db.Users.Remove(row);
+        if (!await Db.TrySaveChangesAsync(JS).ConfigureAwait(false))
+            return;
+        if (_editingUserId == id)
+        {
+            _modalOpen = false;
+            ResetEmpty();
+        }
+        _msg = "Deleted.";
+        StatusBar.SetMessage("Deleted.");
+        await JS.InvokeVoidAsync("helpdeskAdmin.reloadTable", TableId).ConfigureAwait(false);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task CloseModalAsync()
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", "Close the editor? Unsaved changes will be lost.").ConfigureAwait(false))
+            return;
+        _modalOpen = false;
+        ResetEmpty();
+    }
+
+    private async Task ClearFormAsync()
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", "Clear the form? Unsaved changes will be lost.").ConfigureAwait(false))
+            return;
+        if (_editingUserId is { } uid)
+        {
+            var u = await Db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == uid).ConfigureAwait(false);
+            if (u is not null)
+                await OpenEdit(u.Id);
+            else
+                ResetEmpty();
+        }
+        else
+        {
+            ResetEmpty();
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _msg = null;
+        var loginId = AdminNameValidation.ToUpperNoSpaces(_loginId);
+        if (string.IsNullOrEmpty(loginId))
+        {
+            _msg = "Login ID is required.";
+            return;
+        }
+
+        if (_editingUserId is null && string.IsNullOrWhiteSpace(_password))
+        {
+            _msg = "Password is required for new users.";
+            return;
+        }
+
+        var confirmMsg = _editingUserId is null ? "Create this user?" : "Save changes to this user?";
+        if (!await JS.InvokeAsync<bool>("confirm", confirmMsg).ConfigureAwait(false))
+            return;
+
+        var fn = string.IsNullOrWhiteSpace(_firstName) ? null : _firstName.Trim();
+        var ln = string.IsNullOrWhiteSpace(_lastName) ? null : _lastName.Trim();
+
+        if (_editingUserId is { } id)
+        {
+            var u = await Db.Users.FirstOrDefaultAsync(x => x.Id == id);
+            if (u is null)
+            {
+                _msg = "Not found.";
+                return;
+            }
+
+            u.FirstName = fn;
+            u.LastName = ln;
+            u.LoginId = loginId;
+            u.Email = string.IsNullOrWhiteSpace(_email) ? null : _email.Trim();
+            u.DomainSamAccountName = string.IsNullOrWhiteSpace(_sam) ? null : _sam.Trim();
+            u.DomainUserPrincipalName = string.IsNullOrWhiteSpace(_upn) ? null : _upn.Trim();
+            u.Role = _role;
+            u.IsActive = _active;
+            u.UpdatedAt = DateTime.UtcNow;
+            if (!string.IsNullOrWhiteSpace(_password))
+            {
+                u.PasswordHash = Hasher.HashPassword(u, _password);
+                u.MustChangePassword = false;
+            }
+        }
+        else
+        {
+            var u = new User
+            {
+                FirstName = fn,
+                LastName = ln,
+                LoginId = loginId,
+                Email = string.IsNullOrWhiteSpace(_email) ? null : _email.Trim(),
+                DomainSamAccountName = string.IsNullOrWhiteSpace(_sam) ? null : _sam.Trim(),
+                DomainUserPrincipalName = string.IsNullOrWhiteSpace(_upn) ? null : _upn.Trim(),
+                Role = _role,
+                IsActive = _active,
+                MustChangePassword = true,
+                CreatedAt = DateTime.UtcNow
+            };
+            u.PasswordHash = Hasher.HashPassword(u, _password!);
+            Db.Users.Add(u);
+        }
+
+        if (!await Db.TrySaveChangesAsync(JS))
+            return;
+        _modalOpen = false;
+        ResetEmpty();
+        _msg = "Saved.";
+        StatusBar.SetMessage("Saved.");
+        await JS.InvokeVoidAsync("helpdeskAdmin.reloadTable", TableId).ConfigureAwait(false);
+    }
+
+    private void OnLoginIdInput(ChangeEventArgs e) =>
+        _loginId = AdminNameValidation.ToUpperNoSpaces(e.Value?.ToString());
+}

@@ -1,0 +1,236 @@
+@page "/admin/groups"
+
+@attribute [Authorize(Roles = "Admin")]
+
+@implements IAsyncDisposable
+
+@using HelpDesk.Models
+
+@using HelpDesk.Web.Validation
+
+@using Microsoft.AspNetCore.Components
+
+@inject HelpDesk.Models.Data.HelpDeskDbContext Db
+
+@inject IMenuRefreshNotifier MenuRefresh
+
+@inject IStatusBarService StatusBar
+
+@inject IJSRuntime JS
+
+@inject NavigationManager Nav
+
+<PageTitle>Groups</PageTitle>
+
+<div class="hd-admin-page">
+    <h1>Groups</h1>
+    <p class="muted">To grant applications access to groups, use <a href="/admin/application-groups">Application groups</a>.</p>
+    <div class="hd-admin-toolbar">
+        <button type="button" class="hd-btn primary" @onclick="OpenAddAsync">Add</button>
+    </div>
+    <table id="tbl-admin-groups" class="hd-dt cell-border compact stripe" style="width:100%"></table>
+    @if (!string.IsNullOrEmpty(_msg) && !_modalOpen)
+    {
+        <p class="muted">@_msg</p>
+    }
+</div>
+
+@if (_modalOpen)
+{
+    <div class="hd-modal-backdrop">
+        <div class="hd-modal-scrim" @onclick="CloseModalAsync"></div>
+        <div class="hd-modal" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
+            @if (!string.IsNullOrEmpty(_msg))
+            {
+                <p class="hd-modal-banner" role="alert">@_msg</p>
+            }
+            <h3 class="hd-modal-title">@(_editingId is null ? "Add group" : "Edit group")</h3>
+            <div class="form-row"><label>Name</label><input class="hd-input" value="@_name" @oninput="OnNameInput" autocomplete="off" /></div>
+            <div class="form-row"><label>Description</label><input class="hd-input" @bind="_desc" /></div>
+            <div class="hd-modal-actions">
+                <button type="button" class="hd-btn primary" @onclick="SaveAsync">Save</button>
+                @if (_editingId is null)
+                {
+                    <button type="button" class="hd-btn" @onclick="ClearFormAsync">Clear</button>
+                }
+                <button type="button" class="hd-btn" @onclick="CloseModalAsync">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private const string TableId = "tbl-admin-groups";
+    private const string InteropKey = "groups";
+
+    private DotNetObjectReference<AdminGroups>? _interop;
+    private int? _editingId;
+    private bool _modalOpen;
+    private string _name = "";
+    private string? _desc;
+    private string? _msg;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+        if (!await JS.InvokeAsync<bool>("helpdeskAdmin.needsInit", TableId).ConfigureAwait(false))
+            return;
+        _interop = DotNetObjectReference.Create(this);
+        await JS.InvokeVoidAsync("helpdeskAdmin.register", InteropKey, _interop).ConfigureAwait(false);
+        var url = Nav.ToAbsoluteUri("/api/grid/admin/groups").ToString();
+        await JS.InvokeVoidAsync("helpdeskAdmin.initGroups", TableId, url).ConfigureAwait(false);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("helpdeskAdmin.unregister", InteropKey).ConfigureAwait(false);
+            await JS.InvokeVoidAsync("helpdeskAdmin.destroyTable", TableId).ConfigureAwait(false);
+        }
+        catch { /* */ }
+        _interop?.Dispose();
+    }
+
+    private void ResetEmpty()
+    {
+        _editingId = null;
+        _name = "";
+        _desc = "";
+    }
+
+    private async Task OpenAddAsync()
+    {
+        ResetEmpty();
+        _modalOpen = true;
+        _msg = null;
+        await Task.CompletedTask;
+    }
+
+    [JSInvokable]
+    public async Task OpenEdit(int id)
+    {
+        var g = await Db.Groups.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
+        if (g is null)
+        {
+            _msg = "Group not found.";
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+        _editingId = g.Id;
+        _name = g.Name;
+        _desc = g.Description;
+        _modalOpen = true;
+        _msg = null;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public async Task PromptDelete(int id)
+    {
+        var g = await Db.Groups.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
+        if (g is null)
+        {
+            _msg = "Not found.";
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+        if (!await JS.InvokeAsync<bool>("confirm", $"Delete group \"{g.Name}\"? User assignments and application links for this group will be removed.").ConfigureAwait(false))
+            return;
+
+        var row = await Db.Groups.FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
+        if (row is null)
+            return;
+
+        Db.Groups.Remove(row);
+        if (!await Db.TrySaveChangesAsync(JS).ConfigureAwait(false))
+            return;
+        if (_editingId == id)
+        {
+            _modalOpen = false;
+            ResetEmpty();
+        }
+        _msg = "Deleted.";
+        StatusBar.SetMessage("Deleted.");
+        MenuRefresh.NotifyMenuChanged();
+        await JS.InvokeVoidAsync("helpdeskAdmin.reloadTable", TableId).ConfigureAwait(false);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task CloseModalAsync()
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", "Close the editor? Unsaved changes will be lost.").ConfigureAwait(false))
+            return;
+        _modalOpen = false;
+        ResetEmpty();
+    }
+
+    private async Task ClearFormAsync()
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", "Clear the form? Unsaved changes will be lost.").ConfigureAwait(false))
+            return;
+        if (_editingId is { } gid)
+        {
+            var g = await Db.Groups.AsNoTracking().FirstOrDefaultAsync(x => x.Id == gid).ConfigureAwait(false);
+            if (g is not null)
+                await OpenEdit(g.Id);
+            else
+                ResetEmpty();
+        }
+        else
+        {
+            ResetEmpty();
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        var nameNorm = AdminNameValidation.ToUpperNoSpaces(_name);
+        var nameErr = AdminNameValidation.ErrorIfEmptyCatalogName(nameNorm, "Name");
+        if (nameErr is not null)
+        {
+            _msg = nameErr;
+            return;
+        }
+
+        var confirmMsg = _editingId is null ? "Create this group?" : "Save changes to this group?";
+        if (!await JS.InvokeAsync<bool>("confirm", confirmMsg).ConfigureAwait(false))
+            return;
+
+        if (_editingId is { } gid)
+        {
+            var g = await Db.Groups.FirstOrDefaultAsync(x => x.Id == gid);
+            if (g is null)
+            {
+                _msg = "Not found.";
+                return;
+            }
+
+            g.Name = nameNorm;
+            g.Description = _desc;
+            g.UpdatedAt = DateTime.UtcNow;
+        }
+        else
+        {
+            Db.Groups.Add(new DeskGroup
+            {
+                Name = nameNorm,
+                Description = _desc,
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+
+        if (!await Db.TrySaveChangesAsync(JS))
+            return;
+        _modalOpen = false;
+        ResetEmpty();
+        _msg = "Saved.";
+        StatusBar.SetMessage("Saved.");
+        MenuRefresh.NotifyMenuChanged();
+        await JS.InvokeVoidAsync("helpdeskAdmin.reloadTable", TableId).ConfigureAwait(false);
+    }
+
+    private void OnNameInput(ChangeEventArgs e) =>
+        _name = AdminNameValidation.ToUpperNoSpaces(e.Value?.ToString());
+}

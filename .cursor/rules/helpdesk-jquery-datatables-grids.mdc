@@ -1,0 +1,28 @@
+---
+description: HelpDesk Blazor — jQuery DataTables grids, spacing, and init lifecycle
+globs: HelpDesk.Web/Components/Pages/Admin*.razor
+alwaysApply: false
+---
+
+# Data grids (jQuery DataTables)
+
+## Markup
+
+- Use an empty `<table>` with a unique `id`, classes: `hd-dt cell-border compact stripe`, and `style="width:100%"`.
+- Wrap the page in `div.hd-admin-page` when it matches other admin screens.
+- Place **Add** / **filter** rows in `div.hd-admin-toolbar` (optionally `hd-admin-toolbar--filter-end` when aligning filter inputs to the bottom). Global CSS adds **margin below** the toolbar and **extra space** between DataTables’ “Show entries / Search” row and the table — do not use the `display` class (reserved by DataTables).
+
+## JavaScript
+
+- Add a dedicated `initYourFeature(tableId, apiUrl)` in `wwwroot/js/adminGrids.js` using `helpdeskAdmin._dtBase` and column definitions.
+- Prefer `ajax: { dataSrc: '' }` with APIs that return a raw JSON array.
+
+## Blazor lifecycle
+
+- In `OnAfterRenderAsync`, call `helpdeskAdmin.needsInit` before initializing.
+- **Do not** require `firstRender` when the `<table>` is rendered only after async data is loaded (e.g. inside `@if (list.Count > 0)`). After the first paint, `firstRender` is false and the grid would never initialize — use `needsInit` + lazy `DotNetObjectReference` creation instead (see `AdminUserGroups`, `AdminPages`, `AdminApplicationGroups`).
+- Register the interop key once (`if (_interop is null)`), then call the matching `init*` method.
+
+## API
+
+- Admin catalog endpoints live under `api/grid/admin/…` in `AdminCatalogGridController` unless a dedicated controller is justified.

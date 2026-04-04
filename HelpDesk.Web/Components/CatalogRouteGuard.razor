@@ -1,0 +1,80 @@
+@using System.Security.Claims
+
+@using HelpDesk.Models
+
+@implements IDisposable
+
+@inject NavigationManager Nav
+
+@inject AuthenticationStateProvider AuthState
+
+@inject IMenuService MenuService
+
+@if (_denied)
+{
+    <h1>Access denied</h1>
+    <p class="muted">You do not have permission to open this page. Use the menu to see what is available for your account.</p>
+}
+else if (_busy)
+{
+    <p class="muted">Loading…</p>
+}
+else
+{
+    @ChildContent
+}
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private bool _busy = true;
+    private bool _denied;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Nav.LocationChanged += OnLocationChanged;
+        await EvaluateAccessAsync().ConfigureAwait(false);
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e) =>
+        _ = InvokeAsync(EvaluateAccessAsync);
+
+    private async Task EvaluateAccessAsync()
+    {
+        _busy = true;
+        _denied = false;
+        await InvokeAsync(StateHasChanged).ConfigureAwait(false);
+
+        try
+        {
+            var auth = await AuthState.GetAuthenticationStateAsync().ConfigureAwait(false);
+            var user = auth.User;
+            if (user.Identity?.IsAuthenticated != true)
+            {
+                _busy = false;
+                await InvokeAsync(StateHasChanged).ConfigureAwait(false);
+                return;
+            }
+
+            if (!int.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+            {
+                _denied = true;
+                _busy = false;
+                await InvokeAsync(StateHasChanged).ConfigureAwait(false);
+                return;
+            }
+
+            var isAdmin = user.IsInRole(nameof(UserRole.Admin));
+            var path = Nav.ToBaseRelativePath(Nav.Uri);
+            var allowed = await MenuService.CanAccessCatalogRoutePathAsync(path, userId, isAdmin).ConfigureAwait(false);
+            _denied = !allowed;
+        }
+        finally
+        {
+            _busy = false;
+            await InvokeAsync(StateHasChanged).ConfigureAwait(false);
+        }
+    }
+
+    public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
+}

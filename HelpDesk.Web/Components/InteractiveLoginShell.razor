@@ -1,0 +1,6 @@
+@* Prerender off so plain HTML form POST + password toggle (auth.js) work immediately without a hydration mismatch. *@
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+
+<div class="hd-auth-center">
+    <LoginPanel />
+</div>

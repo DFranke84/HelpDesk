@@ -1,0 +1,100 @@
+---
+description: Safely initialize a Visual Studio project in Git with standard .gitignore and customizable initial commit
+globs: "**/*.sln"
+alwaysApply: false
+---
+
+steps:
+  - name: Check if Git is already initialized
+    type: shell
+    command: |
+      if [ -d ".git" ]; then
+        echo "GIT_ALREADY_INITIALIZED=true" > .git_cursor_env
+      else
+        echo "GIT_ALREADY_INITIALIZED=false" > .git_cursor_env
+      fi
+
+  - name: Check if .gitignore exists
+    type: shell
+    command: |
+      if [ -f ".gitignore" ]; then
+        echo "GITIGNORE_EXISTS=true" >> .git_cursor_env
+      else
+        echo "GITIGNORE_EXISTS=false" >> .git_cursor_env
+      fi
+
+  - name: Load environment flags
+    type: shell
+    command: |
+      set -a
+      source .git_cursor_env
+      set +a
+
+  - name: Create .gitignore if missing
+    type: write_file
+    condition: 'GITIGNORE_EXISTS == "false"'
+    path: ".gitignore"
+    content: |
+      # Build Folders
+      bin/
+      obj/
+      Debug/
+      Release/
+
+      # Visual Studio temporary files
+      *.user
+      *.suo
+      *.userosscache
+      *.sln.docstates
+      .vs/
+
+      # Auto-generated files
+      Generated\
+
+      # NuGet packages
+      *.nupkg
+      packages/
+      .nuget/
+
+      # VS Code workspace settings
+      .vscode/
+
+      # Rider settings
+      .idea/
+
+      # Test results
+      TestResults/
+      *.trx
+
+      # Publish output
+      publish/
+
+      # DotCover, ReSharper, Rider, other tool caches
+      *.dotCover
+      *.ReSharper
+      *.sln.iml
+
+      # OS-specific files
+      Thumbs.db
+      .DS_Store
+
+  - name: Initialize Git if needed
+    type: shell
+    condition: 'GIT_ALREADY_INITIALIZED == "false"'
+    command: |
+      git init
+      echo "Git repository initialized."
+
+  - name: Add all files to Git
+    type: shell
+    command: |
+      git add .
+
+  - name: Commit initial version
+    type: shell
+    command: |
+      read -p "Enter commit message (default: 'Initial commit with standard Visual Studio .gitignore'): " msg
+      if [ -z "$msg" ]; then
+        msg="Initial commit with standard Visual Studio .gitignore"
+      fi
+      git commit -m "$msg"

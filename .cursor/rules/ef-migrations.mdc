@@ -1,0 +1,17 @@
+---
+description: EF Core migration naming for any project using EF Core
+globs: "**/Migrations/**/*.cs"
+---
+
+# EF Core Migrations Naming
+
+When adding a new EF Core migration:
+
+1. **Name the migration** `DBMigrationxx` where `xx` is the next two-digit number after the highest existing `DBMigration*` migration  
+   (ignore `*Snapshot.cs` and `*.Designer.cs` sibling files when counting).  
+   - Current baseline is `DBMigration01`; the next is `DBMigration02`, then `DBMigration03`, etc.
+
+2. Use the CLI:
+   ```bash
+   dotnet ef migrations add DBMigrationxx --project <YourProjectName> --startup-project <YourStartupProject>
+   
