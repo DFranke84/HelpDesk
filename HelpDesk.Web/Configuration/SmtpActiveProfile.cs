@@ -13,6 +13,11 @@ public static class SmtpActiveProfile
     /// Returns key/value pairs to merge (e.g. Smtp:Host, Smtp:Port) from the selected profile.
     /// Shared keys such as Smtp:From and Smtp:AlertTo remain on the root <c>Smtp</c> section in appsettings.
     /// </summary>
+    /// <summary>
+    /// Merge the selected SMTP profile into flat Smtp:* configuration keys.
+    /// </summary>
+    /// <param name="configuration">Application configuration <see cref="IConfiguration"/>.</param>
+    /// <returns>Key/value pairs to overlay onto configuration.</returns>
     public static IReadOnlyList<KeyValuePair<string, string?>> GetMergedEntries(IConfiguration configuration)
     {
         var mode = configuration["Smtp:Mode"] ?? ModeStandard;

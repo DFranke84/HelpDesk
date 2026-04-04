@@ -7,6 +7,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HelpDesk.Web.Controllers;
 
+/// <summary>
+/// Serve admin catalog grid JSON for applications, pages, groups, and change history.
+/// </summary>
 [ApiController]
 [Authorize(Roles = "Admin")]
 [Route("api/grid/admin")]
@@ -14,11 +17,20 @@ public sealed class AdminCatalogGridController : ControllerBase
 {
     private readonly HelpDeskDbContext _db;
 
+    /// <summary>
+    /// Create admin grid controller.
+    /// </summary>
+    /// <param name="db">Help Desk database <see cref="HelpDeskDbContext"/>.</param>
     public AdminCatalogGridController(HelpDeskDbContext db)
     {
         _db = db;
     }
 
+    /// <summary>
+    /// List applications for the admin grid.
+    /// </summary>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>JSON rows for applications.</returns>
     [HttpGet("applications")]
     public async Task<IActionResult> Applications(CancellationToken ct)
     {
@@ -38,6 +50,11 @@ public sealed class AdminCatalogGridController : ControllerBase
         return Ok(rows);
     }
 
+    /// <summary>
+    /// List pages for the admin grid.
+    /// </summary>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>JSON rows for pages.</returns>
     [HttpGet("pages")]
     public async Task<IActionResult> Pages(CancellationToken ct)
     {
@@ -58,6 +75,11 @@ public sealed class AdminCatalogGridController : ControllerBase
         return Ok(rows);
     }
 
+    /// <summary>
+    /// List security groups for the admin grid.
+    /// </summary>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>JSON rows for groups.</returns>
     [HttpGet("groups")]
     public async Task<IActionResult> Groups(CancellationToken ct)
     {
@@ -70,6 +92,11 @@ public sealed class AdminCatalogGridController : ControllerBase
         return Ok(rows);
     }
 
+    /// <summary>
+    /// List application-to-group links for the admin grid.
+    /// </summary>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>JSON rows for application groups.</returns>
     [HttpGet("application-groups")]
     public async Task<IActionResult> ApplicationGroups(CancellationToken ct)
     {
@@ -90,6 +117,11 @@ public sealed class AdminCatalogGridController : ControllerBase
         return Ok(rows);
     }
 
+    /// <summary>
+    /// List user group memberships for the admin grid.
+    /// </summary>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>JSON rows for user groups.</returns>
     [HttpGet("user-groups")]
     public async Task<IActionResult> UserGroups(CancellationToken ct)
     {
@@ -121,6 +153,11 @@ public sealed class AdminCatalogGridController : ControllerBase
         return Ok(rows);
     }
 
+    /// <summary>
+    /// List users for the admin grid.
+    /// </summary>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>JSON rows for users.</returns>
     [HttpGet("users")]
     public async Task<IActionResult> Users(CancellationToken ct)
     {
@@ -152,6 +189,12 @@ public sealed class AdminCatalogGridController : ControllerBase
         return Ok(rows);
     }
 
+    /// <summary>
+    /// Load entity change history rows with optional type filter.
+    /// </summary>
+    /// <param name="filterType">Optional entity type substring filter.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>JSON rows for change history.</returns>
     [HttpGet("change-history")]
     public async Task<IActionResult> ChangeHistory([FromQuery] string? filterType, CancellationToken ct)
     {

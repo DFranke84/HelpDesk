@@ -17,6 +17,10 @@ public sealed class LoginRateLimiter : IDisposable
     private readonly ConcurrentDictionary<string, LoginAttemptRecord> _records = new(StringComparer.OrdinalIgnoreCase);
     private readonly Timer _scavengeTimer;
 
+    /// <summary>
+    /// Create login rate limiter from configuration.
+    /// </summary>
+    /// <param name="configuration">Application configuration <see cref="IConfiguration"/>.</param>
     public LoginRateLimiter(IConfiguration configuration)
     {
         _maxAttempts = configuration.GetValue("App:LoginRateLimit:MaxAttempts", 5);
@@ -24,6 +28,12 @@ public sealed class LoginRateLimiter : IDisposable
         _scavengeTimer = new Timer(_ => Scavenge(), null, _window, _window);
     }
 
+    /// <summary>
+    /// Determine whether login attempts are temporarily blocked for the id.
+    /// </summary>
+    /// <param name="loginId">Login id being checked.</param>
+    /// <param name="retryAfter">Remaining lockout duration when blocked.</param>
+    /// <returns>True when further attempts should be rejected until the window elapses.</returns>
     public bool IsBlocked(string loginId, out TimeSpan retryAfter)
     {
         retryAfter = TimeSpan.Zero;
@@ -50,6 +60,11 @@ public sealed class LoginRateLimiter : IDisposable
         }
     }
 
+    /// <summary>
+    /// Record a failed login attempt for rate limiting.
+    /// </summary>
+    /// <param name="loginId">Login id that failed authentication.</param>
+    /// <returns>This method does not return a value.</returns>
     public void RecordFailure(string loginId)
     {
         if (_records.Count >= MaxTrackedLogins)
@@ -63,11 +78,20 @@ public sealed class LoginRateLimiter : IDisposable
         }
     }
 
+    /// <summary>
+    /// Clear rate limit state after a successful login.
+    /// </summary>
+    /// <param name="loginId">Login id that authenticated successfully.</param>
+    /// <returns>This method does not return a value.</returns>
     public void RecordSuccess(string loginId)
     {
         _records.TryRemove(loginId, out _);
     }
 
+    /// <summary>
+    /// Release background timer resources.
+    /// </summary>
+    /// <returns>This method does not return a value.</returns>
     public void Dispose()
     {
         _scavengeTimer.Dispose();

@@ -5,6 +5,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HelpDesk.Web.Controllers;
 
+/// <summary>
+/// Serve NLog grid rows for admin observability views.
+/// </summary>
 [ApiController]
 [Authorize(Roles = "Admin")]
 [Route("api/grid")]
@@ -12,11 +15,23 @@ public class ObservabilityGridController : ControllerBase
 {
     private readonly HelpDeskDbContext _db;
 
+    /// <summary>
+    /// Create observability grid controller.
+    /// </summary>
+    /// <param name="db">Help Desk database <see cref="HelpDeskDbContext"/>.</param>
     public ObservabilityGridController(HelpDeskDbContext db)
     {
         _db = db;
     }
 
+    /// <summary>
+    /// Query recent NLog rows with optional filters.
+    /// </summary>
+    /// <param name="correlationId">Optional correlation id filter.</param>
+    /// <param name="levels">Comma-separated level filter.</param>
+    /// <param name="activityCategories">Comma-separated activity category filter.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>JSON projection of NLog entries.</returns>
     [HttpGet("nlog")]
     public async Task<IActionResult> NLog(
         [FromQuery] Guid? correlationId,

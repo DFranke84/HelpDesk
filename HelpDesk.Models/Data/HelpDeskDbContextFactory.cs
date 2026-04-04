@@ -4,8 +4,16 @@ using Microsoft.Extensions.Configuration;
 
 namespace HelpDesk.Models.Data;
 
+/// <summary>
+/// Design-time factory for Help Desk migrations and tooling.
+/// </summary>
 public class HelpDeskDbContextFactory : IDesignTimeDbContextFactory<HelpDeskDbContext>
 {
+    /// <summary>
+    /// Build a Help Desk context using web project configuration.
+    /// </summary>
+    /// <param name="args">Unused design-time arguments.</param>
+    /// <returns>Configured <see cref="HelpDeskDbContext"/>.</returns>
     public HelpDeskDbContext CreateDbContext(string[] args)
     {
         var basePath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "HelpDesk.Web"));

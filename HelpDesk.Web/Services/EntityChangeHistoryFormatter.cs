@@ -5,8 +5,19 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HelpDesk.Web.Services;
 
+/// <summary>
+/// Load and label entity change history rows for admin grids.
+/// </summary>
 public static class EntityChangeHistoryFormatter
 {
+    /// <summary>
+    /// Query change history with friendly labels for related entities.
+    /// </summary>
+    /// <param name="db">Help Desk database <see cref="HelpDeskDbContext"/>.</param>
+    /// <param name="filterType">Optional entity type substring filter.</param>
+    /// <param name="take">Maximum rows to return.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Formatted rows for display.</returns>
     public static async Task<List<EntityChangeHistoryRowDto>> LoadRowsAsync(
         HelpDeskDbContext db,
         string? filterType,

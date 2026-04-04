@@ -5,6 +5,11 @@ namespace HelpDesk.Web.Validation;
 /// <summary>Catalog identifiers: uppercase, no whitespace (enforced in UI while typing and on save).</summary>
 public static class AdminNameValidation
 {
+    /// <summary>
+    /// Detect whitespace characters in a catalog or login identifier.
+    /// </summary>
+    /// <param name="s">Candidate string.</param>
+    /// <returns>True when any whitespace is present.</returns>
     public static bool ContainsDisallowedWhitespace(string? s)
     {
         if (string.IsNullOrEmpty(s))
@@ -17,7 +22,11 @@ public static class AdminNameValidation
         return false;
     }
 
-    /// <summary>Strips whitespace and uppercases each remaining character (login ID, app/group/page names).</summary>
+    /// <summary>
+    /// Strip whitespace and uppercase remaining characters for catalog identifiers.
+    /// </summary>
+    /// <param name="s">Raw input text.</param>
+    /// <returns>Normalized uppercase string without spaces.</returns>
     public static string ToUpperNoSpaces(string? s)
     {
         if (string.IsNullOrEmpty(s))
@@ -31,9 +40,21 @@ public static class AdminNameValidation
         return sb.ToString();
     }
 
+    /// <summary>
+    /// Return a validation error when the value contains spaces.
+    /// </summary>
+    /// <param name="value">Field value to inspect.</param>
+    /// <param name="fieldLabel">Human-readable field name for the message.</param>
+    /// <returns>Error text, or null when valid.</returns>
     public static string? ErrorIfHasSpaces(string? value, string fieldLabel) =>
         ContainsDisallowedWhitespace(value) ? $"{fieldLabel} cannot contain spaces." : null;
 
+    /// <summary>
+    /// Return a validation error when the normalized catalog name is empty.
+    /// </summary>
+    /// <param name="value">Field value to inspect.</param>
+    /// <param name="fieldLabel">Human-readable field name for the message.</param>
+    /// <returns>Error text, or null when valid.</returns>
     public static string? ErrorIfEmptyCatalogName(string? value, string fieldLabel) =>
         string.IsNullOrWhiteSpace(ToUpperNoSpaces(value)) ? $"{fieldLabel} is required." : null;
 }

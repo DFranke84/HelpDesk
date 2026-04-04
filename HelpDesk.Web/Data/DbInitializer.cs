@@ -15,7 +15,12 @@ namespace HelpDesk.Web.Data;
 /// </summary>
 public static class DbInitializer
 {
-    /// <summary>Applies migrations, ensures BOOKS application/group/page links, then seeds an initial admin only when the database has no users.</summary>
+    /// <summary>
+    /// Apply migrations, ensure BOOKS catalog links, and seed an initial admin when the database has no users.
+    /// </summary>
+    /// <param name="services">Root service provider <see cref="IServiceProvider"/>.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A task that completes when migration and optional seeding finish.</returns>
     public static async Task MigrateAsync(IServiceProvider services, CancellationToken ct = default)
     {
         await using var scope = services.CreateAsyncScope();

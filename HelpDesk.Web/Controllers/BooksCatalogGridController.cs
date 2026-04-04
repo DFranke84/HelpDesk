@@ -5,6 +5,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HelpDesk.Web.Controllers;
 
+/// <summary>
+/// Serve books catalog grid JSON from the external Books database.
+/// </summary>
 [ApiController]
 [Authorize]
 [Route("api/grid/books")]
@@ -12,11 +15,20 @@ public sealed class BooksCatalogGridController : ControllerBase
 {
     private readonly BooksDbContext _db;
 
+    /// <summary>
+    /// Create books catalog grid controller.
+    /// </summary>
+    /// <param name="db">Books database <see cref="BooksDbContext"/>.</param>
     public BooksCatalogGridController(BooksDbContext db)
     {
         _db = db;
     }
 
+    /// <summary>
+    /// List books for the catalog grid.
+    /// </summary>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>JSON rows for books.</returns>
     [HttpGet("catalog")]
     public async Task<IActionResult> Catalog(CancellationToken ct)
     {

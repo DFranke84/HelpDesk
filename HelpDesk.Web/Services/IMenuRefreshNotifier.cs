@@ -13,5 +13,9 @@ public interface IMenuRefreshNotifier
 {
     event Action? MenuChanged;
 
+    /// <summary>
+    /// Raise menu changed so listeners reload navigation.
+    /// </summary>
+    /// <returns>This method does not return a value.</returns>
     void NotifyMenuChanged();
 }

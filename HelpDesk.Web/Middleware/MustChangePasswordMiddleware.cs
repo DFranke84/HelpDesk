@@ -7,11 +7,20 @@ public sealed class MustChangePasswordMiddleware
 {
     private readonly RequestDelegate _next;
 
+    /// <summary>
+    /// Create must-change-password middleware.
+    /// </summary>
+    /// <param name="next">Next middleware <see cref="RequestDelegate"/>.</param>
     public MustChangePasswordMiddleware(RequestDelegate next)
     {
         _next = next;
     }
 
+    /// <summary>
+    /// Redirect authenticated users with must-change-password claim to the first-login page.
+    /// </summary>
+    /// <param name="context">Current HTTP context <see cref="HttpContext"/>.</param>
+    /// <returns>A task that completes when the response is sent or the next delegate runs.</returns>
     public Task InvokeAsync(HttpContext context)
     {
         if (context.User.Identity?.IsAuthenticated != true)

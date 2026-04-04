@@ -6,10 +6,18 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace HelpDesk.Models.Data;
 
+/// <summary>
+/// Help Desk EF Core context with entity change history on save.
+/// </summary>
 public sealed class HelpDeskDbContext : DbContext
 {
     private readonly ICurrentUserContext? _currentUser;
 
+    /// <summary>
+    /// Create Help Desk database context.
+    /// </summary>
+    /// <param name="options">EF Core options <see cref="DbContextOptions{TContext}"/>.</param>
+    /// <param name="currentUser">Optional user for change history <see cref="ICurrentUserContext"/>.</param>
     public HelpDeskDbContext(DbContextOptions<HelpDeskDbContext> options, ICurrentUserContext? currentUser = null)
         : base(options)
     {
@@ -26,6 +34,11 @@ public sealed class HelpDeskDbContext : DbContext
     public DbSet<EntityChangeHistory> EntityChangeHistories => Set<EntityChangeHistory>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
 
+    /// <summary>
+    /// Persist changes and append entity change history rows.
+    /// </summary>
+    /// <param name="acceptAllChangesOnSuccess">Whether to accept all changes when successful.</param>
+    /// <returns>Number of state entries written in the first save.</returns>
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         var pending = BuildPendingHistories();
@@ -51,6 +64,12 @@ public sealed class HelpDeskDbContext : DbContext
         return n;
     }
 
+    /// <summary>
+    /// Persist changes asynchronously and append entity change history rows.
+    /// </summary>
+    /// <param name="acceptAllChangesOnSuccess">Whether to accept all changes when successful.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Number of state entries written in the first save.</returns>
     public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
     {
         var pending = BuildPendingHistories();
@@ -205,6 +224,11 @@ public sealed class HelpDeskDbContext : DbContext
         }
     }
 
+    /// <summary>
+    /// Configure Help Desk table mappings and UTC conversions.
+    /// </summary>
+    /// <param name="modelBuilder">EF Core model builder <see cref="ModelBuilder"/>.</param>
+    /// <returns>This method does not return a value.</returns>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         var utcConverter = new ValueConverter<DateTime, DateTime>(

@@ -17,6 +17,13 @@ public sealed class WebObservabilityService : IObservabilityService
     private readonly IDbContextFactory<HelpDeskDbContext> _dbFactory;
     private readonly ILogger<WebObservabilityService> _logger;
 
+    /// <summary>
+    /// Create web observability service with database mirroring.
+    /// </summary>
+    /// <param name="correlation">Correlation scope <see cref="ICorrelationContext"/>.</param>
+    /// <param name="log">NLog bridge <see cref="EventLogManager"/>.</param>
+    /// <param name="dbFactory">Help Desk context factory <see cref="IDbContextFactory{TContext}"/>.</param>
+    /// <param name="logger">Diagnostic logger <see cref="ILogger{WebObservabilityService}"/>.</param>
     public WebObservabilityService(ICorrelationContext correlation, EventLogManager log,
         IDbContextFactory<HelpDeskDbContext> dbFactory, ILogger<WebObservabilityService> logger)
     {
@@ -30,6 +37,15 @@ public sealed class WebObservabilityService : IObservabilityService
 
     private Guid CorrelationIdForThisEntry() => _correlation.Id ?? Guid.NewGuid();
 
+    /// <summary>
+    /// Write audit line to the log file and NLog table.
+    /// </summary>
+    /// <param name="actionType">Audit action classification.</param>
+    /// <param name="loginId">Subject login id when known.</param>
+    /// <param name="message">Primary message text.</param>
+    /// <param name="details">Additional detail text.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A task that completes when the entry is written.</returns>
     public async Task AddAuditAsync(string actionType, string? loginId, string? message, string? details,
         CancellationToken cancellationToken = default)
     {
@@ -43,6 +59,14 @@ public sealed class WebObservabilityService : IObservabilityService
         await TryInsertNLogAsync("Info", text, "Audit", corr, loginId, null, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Write error line to the log file and NLog table.
+    /// </summary>
+    /// <param name="message">Error message.</param>
+    /// <param name="stackTrace">Optional stack trace.</param>
+    /// <param name="severity">Severity label for routing.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A task that completes when the entry is written.</returns>
     public async Task AddErrorAsync(string message, string? stackTrace, string severity,
         CancellationToken cancellationToken = default)
     {
@@ -55,6 +79,13 @@ public sealed class WebObservabilityService : IObservabilityService
         await TryInsertNLogAsync("Error", text, "Error", corr, null, stackTrace, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Write general log line to the log file and NLog table.
+    /// </summary>
+    /// <param name="message">Log message.</param>
+    /// <param name="level">Logical level name.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A task that completes when the entry is written.</returns>
     public async Task AddLogAsync(string message, string level, CancellationToken cancellationToken = default)
     {
         var corr = CorrelationIdForThisEntry();

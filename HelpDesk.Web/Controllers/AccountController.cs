@@ -21,6 +21,11 @@ namespace HelpDesk.Web.Controllers;
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]
 internal sealed class RequireFetchHeaderAttribute : ActionFilterAttribute
 {
+    /// <summary>
+    /// Reject the action when the fetch header is missing.
+    /// </summary>
+    /// <param name="context">Executing action context <see cref="ActionExecutingContext"/>.</param>
+    /// <returns>This method does not return a value.</returns>
     public override void OnActionExecuting(ActionExecutingContext context)
     {
         if (context.ActionDescriptor.EndpointMetadata.Any(m => m is SkipFetchHeaderCheckAttribute))
@@ -44,6 +49,9 @@ internal sealed class SkipFetchHeaderCheckAttribute : Attribute { }
 /// JSON/fetch endpoints require <c>X-Requested-With</c> header for CSRF defense (cross-origin forms cannot set custom headers).
 /// Form-POST endpoints are exempt and rely on SameSite=Lax cookies plus endpoint-level security (credentials / secret tokens).
 /// </remarks>
+/// <summary>
+/// Handle sign-in, password changes, and password reset API endpoints.
+/// </summary>
 [Route("api/[controller]")]
 [RequireFetchHeader]
 public class AccountController : ControllerBase
@@ -56,6 +64,16 @@ public class AccountController : ControllerBase
     private readonly IConfiguration _configuration;
     private readonly LoginRateLimiter _rateLimiter;
 
+    /// <summary>
+    /// Create account controller with auth and email dependencies.
+    /// </summary>
+    /// <param name="db">Help Desk database <see cref="HelpDeskDbContext"/>.</param>
+    /// <param name="observability">Observability sink <see cref="IObservabilityService"/>.</param>
+    /// <param name="hasher">Password hasher <see cref="PasswordHasher{User}"/>.</param>
+    /// <param name="passwordReset">Reset token service <see cref="PasswordResetService"/>.</param>
+    /// <param name="email">Transactional email <see cref="IEmailSender"/>.</param>
+    /// <param name="configuration">Application configuration <see cref="IConfiguration"/>.</param>
+    /// <param name="rateLimiter">Login rate limiter <see cref="LoginRateLimiter"/>.</param>
     public AccountController(
         HelpDeskDbContext db,
         IObservabilityService observability,
@@ -76,6 +94,12 @@ public class AccountController : ControllerBase
 
     public record LoginRequest(string LoginId, string Password, string? ReturnUrl);
 
+    /// <summary>
+    /// Authenticate with JSON credentials and issue auth cookie.
+    /// </summary>
+    /// <param name="req">Login payload <see cref="LoginRequest"/>.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>JSON result with redirect URL and must-change-password flag.</returns>
     [AllowAnonymous]
     [IgnoreAntiforgeryToken]
     [HttpPost("login")]
@@ -136,8 +160,15 @@ public class AccountController : ControllerBase
         return Ok(new { ok = true, mustChangePassword = user.MustChangePassword, returnUrl = url });
     }
 
-    /// <summary>Browser form POST (no Blazor circuit / no JavaScript required). Primary login path for reliability.</summary>
+    /// <summary>
+    /// Authenticate via browser form post and redirect on success.
+    /// </summary>
     /// <remarks>Antiforgery tokens cannot be rendered in interactive-mode Blazor; SameSite=Lax cookies mitigate cross-site POST.</remarks>
+    /// <param name="loginId">Submitted login id.</param>
+    /// <param name="password">Submitted password.</param>
+    /// <param name="returnUrl">Optional local return path after login.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Redirect to home, first-login password, or login error.</returns>
     [AllowAnonymous]
     [IgnoreAntiforgeryToken]
     [SkipFetchHeaderCheck]
@@ -204,7 +235,12 @@ public class AccountController : ControllerBase
 
     public record SetPasswordRequest(string CurrentPassword, string NewPassword);
 
-    /// <summary>Change password while signed in (required when <see cref="User.MustChangePassword"/> is true).</summary>
+    /// <summary>
+    /// Change password while signed in (required when <see cref="User.MustChangePassword"/> is true).
+    /// </summary>
+    /// <param name="req">Current and new password <see cref="SetPasswordRequest"/>.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Success payload or validation errors.</returns>
     [Authorize]
     [IgnoreAntiforgeryToken]
     [HttpPost("set-password")]
@@ -250,6 +286,11 @@ public class AccountController : ControllerBase
         return Ok(new { ok = true });
     }
 
+    /// <summary>
+    /// Sign out and clear auth cookies.
+    /// </summary>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Empty OK when sign-out completes.</returns>
     [Authorize]
     [IgnoreAntiforgeryToken]
     [HttpPost("logout")]
@@ -308,6 +349,10 @@ public class AccountController : ControllerBase
     private void ClearSuppressWindowsAutoLoginCookie() =>
         Response.Cookies.Delete(AuthCookieNames.SuppressWindowsAutoLogin, new CookieOptions { Path = "/" });
 
+    /// <summary>
+    /// Keep session alive for idle-timeout tracking.
+    /// </summary>
+    /// <returns>Empty OK response.</returns>
     [Authorize]
     [IgnoreAntiforgeryToken]
     [HttpPost("session/ping")]
@@ -315,6 +360,12 @@ public class AccountController : ControllerBase
 
     public record RequestPasswordChangeRequest(string Email);
 
+    /// <summary>
+    /// Email a password reset link for the given address.
+    /// </summary>
+    /// <param name="req">Email request <see cref="RequestPasswordChangeRequest"/>.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Generic success (no email enumeration).</returns>
     [AllowAnonymous]
     [IgnoreAntiforgeryToken]
     [HttpPost("request-password-change")]
@@ -334,7 +385,12 @@ public class AccountController : ControllerBase
 
     public record RequestPasswordResetByLoginRequest(string LoginId);
 
-    /// <summary>Forgot password: looks up email by login ID and sends a reset link valid for 10 minutes.</summary>
+    /// <summary>
+    /// Look up email by login id and send a reset link valid for 10 minutes.
+    /// </summary>
+    /// <param name="req">Login id payload <see cref="RequestPasswordResetByLoginRequest"/>.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Generic success payload.</returns>
     [AllowAnonymous]
     [IgnoreAntiforgeryToken]
     [HttpPost("request-password-reset-by-login")]
@@ -354,8 +410,14 @@ public class AccountController : ControllerBase
         return Ok(new { ok = true });
     }
 
-    /// <summary>Browser form POST for forgot password (same reliability as <c>login-form</c>; no Blazor circuit required).</summary>
+    /// <summary>
+    /// Submit forgot-password by form post and redirect with status query keys.
+    /// </summary>
     /// <remarks>Antiforgery tokens cannot be rendered in interactive-mode Blazor; SameSite=Lax cookies mitigate cross-site POST.</remarks>
+    /// <param name="loginId">Submitted login id.</param>
+    /// <param name="redirectAfter">Relative path to return to after handling.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Redirect with forgot-password status.</returns>
     [AllowAnonymous]
     [IgnoreAntiforgeryToken]
     [SkipFetchHeaderCheck]
@@ -423,6 +485,12 @@ public class AccountController : ControllerBase
 
     public record ResetPasswordRequest(string Token, string NewPassword);
 
+    /// <summary>
+    /// Complete password reset using a one-time token.
+    /// </summary>
+    /// <param name="req">Token and new password <see cref="ResetPasswordRequest"/>.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Success or validation errors.</returns>
     [AllowAnonymous]
     [IgnoreAntiforgeryToken]
     [HttpPost("reset-password")]
@@ -436,8 +504,15 @@ public class AccountController : ControllerBase
         return Ok(new { ok = true });
     }
 
-    /// <summary>Browser form POST for reset password (no Blazor circuit required; pairs with <c>data-enhance="false"</c>).</summary>
+    /// <summary>
+    /// Complete password reset via form post and redirect to login.
+    /// </summary>
     /// <remarks>Antiforgery tokens cannot be rendered in interactive-mode Blazor; SameSite=Lax cookies mitigate cross-site POST. Requires a valid secret token.</remarks>
+    /// <param name="token">One-time reset token.</param>
+    /// <param name="password">New password.</param>
+    /// <param name="confirmPassword">Confirmation of new password.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Redirect to login or back to reset page with errors.</returns>
     [AllowAnonymous]
     [IgnoreAntiforgeryToken]
     [SkipFetchHeaderCheck]

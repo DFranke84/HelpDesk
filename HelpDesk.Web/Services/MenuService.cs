@@ -12,11 +12,22 @@ public class MenuService : IMenuService
 {
     private readonly IDbContextFactory<HelpDeskDbContext> _factory;
 
+    /// <summary>
+    /// Create menu service with a database factory.
+    /// </summary>
+    /// <param name="factory">Context factory <see cref="IDbContextFactory{TContext}"/> for <see cref="HelpDeskDbContext"/>.</param>
     public MenuService(IDbContextFactory<HelpDeskDbContext> factory)
     {
         _factory = factory;
     }
 
+    /// <summary>
+    /// Load active applications visible to the user.
+    /// </summary>
+    /// <param name="userId">Current user id.</param>
+    /// <param name="isAdmin">Whether the user is an administrator.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Applications ordered by name.</returns>
     public async Task<List<DeskApplication>> GetAccessibleApplicationsAsync(int userId, bool isAdmin, CancellationToken ct = default)
     {
         await using var db = await _factory.CreateDbContextAsync(ct).ConfigureAwait(false);
@@ -43,6 +54,14 @@ public class MenuService : IMenuService
             .ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Load active pages within an application for the user.
+    /// </summary>
+    /// <param name="appId">Desk application id.</param>
+    /// <param name="userId">Current user id.</param>
+    /// <param name="isAdmin">Whether the user is an administrator.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Pages ordered for display.</returns>
     public async Task<List<DeskPage>> GetAccessiblePagesAsync(int appId, int userId, bool isAdmin, CancellationToken ct = default)
     {
         await using var db = await _factory.CreateDbContextAsync(ct).ConfigureAwait(false);
@@ -76,6 +95,14 @@ public class MenuService : IMenuService
             .ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Load accessible pages for multiple applications in one round trip.
+    /// </summary>
+    /// <param name="appIds">Application ids to include.</param>
+    /// <param name="userId">Current user id.</param>
+    /// <param name="isAdmin">Whether the user is an administrator.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Pages grouped by application id.</returns>
     public async Task<Dictionary<int, List<DeskPage>>> GetAccessiblePagesByAppsAsync(IEnumerable<int> appIds, int userId, bool isAdmin, CancellationToken ct = default)
     {
         await using var db = await _factory.CreateDbContextAsync(ct).ConfigureAwait(false);
@@ -115,6 +142,14 @@ public class MenuService : IMenuService
             .ToDictionary(g => g.Key, g => g.ToList());
     }
 
+    /// <summary>
+    /// Determine whether the user may navigate to a catalog route path.
+    /// </summary>
+    /// <param name="path">Relative or absolute catalog path.</param>
+    /// <param name="userId">Current user id.</param>
+    /// <param name="isAdmin">Whether the user is an administrator.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>True when access is allowed or the path is not a catalog route.</returns>
     public async Task<bool> CanAccessCatalogRoutePathAsync(string path, int userId, bool isAdmin, CancellationToken ct = default)
     {
         var normalized = NormalizeCatalogPath(path);
@@ -135,6 +170,11 @@ public class MenuService : IMenuService
         return allowed.Exists(p => p.Id == page.Id);
     }
 
+    /// <summary>
+    /// Normalize a catalog path for comparison with stored routes.
+    /// </summary>
+    /// <param name="relativeOrAbsolutePath">Path from the browser or configuration.</param>
+    /// <returns>Leading-slash path without query string or trailing slash.</returns>
     internal static string NormalizeCatalogPath(string relativeOrAbsolutePath)
     {
         if (string.IsNullOrWhiteSpace(relativeOrAbsolutePath))

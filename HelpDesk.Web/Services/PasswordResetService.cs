@@ -19,6 +19,14 @@ public class PasswordResetService
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ILogger<PasswordResetService> _logger;
 
+    /// <summary>
+    /// Create password reset service.
+    /// </summary>
+    /// <param name="db">Help Desk database <see cref="HelpDeskDbContext"/>.</param>
+    /// <param name="hasher">Password hasher <see cref="PasswordHasher{User}"/>.</param>
+    /// <param name="configuration">Application configuration <see cref="IConfiguration"/>.</param>
+    /// <param name="httpContextAccessor">Current HTTP context <see cref="IHttpContextAccessor"/>.</param>
+    /// <param name="logger">Logger <see cref="ILogger{PasswordResetService}"/>.</param>
     public PasswordResetService(
         HelpDeskDbContext db,
         PasswordHasher<User> hasher,
@@ -45,6 +53,12 @@ public class PasswordResetService
         return (_configuration["App:BaseUrl"] ?? "").TrimEnd('/');
     }
 
+    /// <summary>
+    /// Create a reset link for an active user matching the email address.
+    /// </summary>
+    /// <param name="email">User email address.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Absolute reset URL, or null when no user matches.</returns>
     public async Task<string?> CreateResetTokenAsync(string email, CancellationToken ct = default)
     {
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == email && u.IsActive, ct).ConfigureAwait(false);
@@ -71,7 +85,12 @@ public class PasswordResetService
         return $"{baseUrl}/account/reset-password?token={Uri.EscapeDataString(raw)}";
     }
 
-    /// <summary>Creates a reset link for the active user with the given login ID; token expires in 10 minutes.</summary>
+    /// <summary>
+    /// Create a reset link for the active user with the given login id (10-minute token).
+    /// </summary>
+    /// <param name="loginId">Normalized login id.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Link and email when created; otherwise null.</returns>
     public async Task<(string Link, string Email)?> TryCreateResetTokenByLoginIdAsync(string loginId, CancellationToken ct = default)
     {
         var normalized = AdminNameValidation.ToUpperNoSpaces(loginId);
@@ -102,6 +121,13 @@ public class PasswordResetService
         return (link, user.Email.Trim());
     }
 
+    /// <summary>
+    /// Apply a new password using a valid one-time token.
+    /// </summary>
+    /// <param name="rawToken">Plaintext token from the email link.</param>
+    /// <param name="newPassword">New password value.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Success flag and optional error message.</returns>
     public async Task<(bool ok, string? error)> ResetPasswordAsync(string rawToken, string newPassword, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(newPassword) || newPassword.Length < Validation.PasswordPolicy.MinLength)

@@ -10,7 +10,16 @@ public interface IStatusBarService
 
     event Action? Changed;
 
+    /// <summary>
+    /// Set footer status text and notify listeners.
+    /// </summary>
+    /// <param name="message">Status text, or null to clear.</param>
+    /// <returns>This method does not return a value.</returns>
     void SetMessage(string? message);
 
+    /// <summary>
+    /// Clear the footer message.
+    /// </summary>
+    /// <returns>This method does not return a value.</returns>
     void Clear();
 }

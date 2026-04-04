@@ -5,11 +5,26 @@ namespace HelpDesk.Web.Services;
 
 public static class CookieAuthClaims
 {
+    /// <summary>
+    /// Build claims for a forms-authenticated session.
+    /// </summary>
+    /// <param name="user">Application user <see cref="User"/>.</param>
+    /// <returns>Claims list for cookie sign-in.</returns>
     public static List<Claim> BuildForFormsUser(User user) => BuildForUser(user, AuthClaims.SessionForms);
 
+    /// <summary>
+    /// Build claims for an integrated Windows session.
+    /// </summary>
+    /// <param name="user">Application user <see cref="User"/>.</param>
+    /// <returns>Claims list for cookie sign-in.</returns>
     public static List<Claim> BuildForWindowsUser(User user) => BuildForUser(user, AuthClaims.SessionWindows);
 
-    /// <summary>Builds cookie claims; preserves <paramref name="sessionKind"/> when re-signing in after password change.</summary>
+    /// <summary>
+    /// Build cookie claims and preserve session kind when re-signing in after password change.
+    /// </summary>
+    /// <param name="user">Application user <see cref="User"/>.</param>
+    /// <param name="sessionKind">Session kind marker (forms or windows).</param>
+    /// <returns>Claims list for cookie sign-in.</returns>
     public static List<Claim> BuildForUser(User user, string sessionKind)
     {
         var displayName = UserDisplayName.Format(user);

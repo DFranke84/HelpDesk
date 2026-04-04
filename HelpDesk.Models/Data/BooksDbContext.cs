@@ -3,8 +3,15 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HelpDesk.Models.Data;
 
+/// <summary>
+/// Books library EF Core context for the external Books SQL database.
+/// </summary>
 public sealed class BooksDbContext : DbContext
 {
+    /// <summary>
+    /// Create Books database context.
+    /// </summary>
+    /// <param name="options">EF Core options <see cref="DbContextOptions{TContext}"/>.</param>
     public BooksDbContext(DbContextOptions<BooksDbContext> options)
         : base(options)
     {
@@ -13,6 +20,11 @@ public sealed class BooksDbContext : DbContext
     public DbSet<Book> Books => Set<Book>();
     public DbSet<Publisher> Publishers => Set<Publisher>();
 
+    /// <summary>
+    /// Configure Books and Publisher table mappings.
+    /// </summary>
+    /// <param name="modelBuilder">EF Core model builder <see cref="ModelBuilder"/>.</param>
+    /// <returns>This method does not return a value.</returns>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<Publisher>(e =>

@@ -11,15 +11,30 @@ using NLog;
 
 namespace HelpDesk.Web.Middleware;
 
+/// <summary>
+/// Sign in Help Desk users automatically when integrated Windows authentication succeeds.
+/// </summary>
 public sealed class WindowsAutoLoginMiddleware
 {
     private readonly RequestDelegate _next;
 
+    /// <summary>
+    /// Create Windows auto-login middleware.
+    /// </summary>
+    /// <param name="next">Next middleware <see cref="RequestDelegate"/>.</param>
     public WindowsAutoLoginMiddleware(RequestDelegate next)
     {
         _next = next;
     }
 
+    /// <summary>
+    /// Attempt Windows integrated sign-in or forward the request unchanged.
+    /// </summary>
+    /// <param name="context">Current HTTP context <see cref="HttpContext"/>.</param>
+    /// <param name="db">Help Desk database <see cref="HelpDeskDbContext"/>.</param>
+    /// <param name="observability">Observability sink <see cref="IObservabilityService"/>.</param>
+    /// <param name="configuration">Application configuration <see cref="IConfiguration"/>.</param>
+    /// <returns>A task that completes when the pipeline finishes.</returns>
     public async Task InvokeAsync(
         HttpContext context,
         HelpDeskDbContext db,

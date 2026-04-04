@@ -10,12 +10,25 @@ public sealed class EmailSender : IEmailSender
     private readonly IConfiguration _configuration;
     private readonly ILogger<EmailSender> _logger;
 
+    /// <summary>
+    /// Create SMTP email sender.
+    /// </summary>
+    /// <param name="configuration">Application configuration <see cref="IConfiguration"/>.</param>
+    /// <param name="logger">Logger <see cref="ILogger{EmailSender}"/>.</param>
     public EmailSender(IConfiguration configuration, ILogger<EmailSender> logger)
     {
         _configuration = configuration;
         _logger = logger;
     }
 
+    /// <summary>
+    /// Send a plain-text email when SMTP is configured.
+    /// </summary>
+    /// <param name="to">Recipient address.</param>
+    /// <param name="subject">Message subject.</param>
+    /// <param name="body">Message body.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A task that completes when the message is sent or skipped.</returns>
     public async Task SendAsync(string to, string subject, string body, CancellationToken ct = default)
     {
         var host = _configuration["Smtp:Host"];

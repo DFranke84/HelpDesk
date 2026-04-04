@@ -4,8 +4,16 @@ using Microsoft.Extensions.Configuration;
 
 namespace HelpDesk.Models.Data;
 
+/// <summary>
+/// Design-time factory for Books database migrations and tooling.
+/// </summary>
 public class BooksDbContextFactory : IDesignTimeDbContextFactory<BooksDbContext>
 {
+    /// <summary>
+    /// Build a Books context using web project configuration.
+    /// </summary>
+    /// <param name="args">Unused design-time arguments.</param>
+    /// <returns>Configured <see cref="BooksDbContext"/>.</returns>
     public BooksDbContext CreateDbContext(string[] args)
     {
         var basePath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "HelpDesk.Web"));

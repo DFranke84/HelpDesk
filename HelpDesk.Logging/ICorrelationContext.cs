@@ -16,9 +16,9 @@ public interface ICorrelationContext
     Guid BeginNew();
 
     /// <summary>
-    /// Drops the active correlation id. Later <c>AddAuditAsync</c>, <c>AddLogAsync</c>, and <c>AddErrorAsync</c>
-    /// calls behave as if no correlation was started (each gets its own id per call) until <see cref="BeginNew"/> again.
+    /// Drop the active correlation id so later observability calls allocate per-entry ids until <see cref="BeginNew"/> runs again.
     /// </summary>
+    /// <returns>This method does not return a value.</returns>
     void CancelCorrelation();
 }
 
