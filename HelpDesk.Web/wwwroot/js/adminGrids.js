@@ -99,10 +99,10 @@ window.helpdeskAdmin = {
     }
     var opts = {
       ajax: { url: apiUrl, dataSrc: '', xhrFields: { withCredentials: true } },
-      pageLength: 25,
+      pageLength: 10,
       lengthMenu: [
-        [10, 25, 50, 100, -1],
-        [10, 25, 50, 100, 'All']
+        [10, 20, 50, 75, 100, -1],
+        [10, 20, 50, 75, 100, 'All']
       ]
     };
     for (var k in extra) {

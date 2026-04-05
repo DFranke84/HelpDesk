@@ -15,6 +15,10 @@
 
 /* ========== BASE / RESET ========== */
 
+html {
+  color-scheme: dark;
+}
+
 html, body {
   margin: 0;
   min-height: 100%;
@@ -634,6 +638,39 @@ a:hover {
 /* ========== DATATABLES OVERRIDES ========== */
 
 .dataTables_wrapper {
+  color: var(--hd-text);
+}
+
+/* "Show n entries" — closed control + dropdown list (DT CDN CSS loads before this file) */
+.dataTables_wrapper .dataTables_length label {
+  color: var(--hd-text);
+}
+
+.dataTables_wrapper .dataTables_length select {
+  margin: 0 0.35rem;
+  padding: 0.35rem 1.85rem 0.35rem 0.55rem;
+  min-height: 2rem;
+  border-radius: 6px;
+  border: 1px solid var(--hd-border);
+  background-color: var(--hd-surface-2);
+  color: var(--hd-text);
+  font: inherit;
+  color-scheme: dark;
+  cursor: pointer;
+}
+
+.dataTables_wrapper .dataTables_length select:hover {
+  border-color: var(--hd-muted);
+}
+
+.dataTables_wrapper .dataTables_length select:focus {
+  border-color: var(--hd-accent);
+  outline: 2px solid rgba(79, 140, 255, 0.35);
+  outline-offset: 1px;
+}
+
+.dataTables_wrapper .dataTables_length select option {
+  background-color: var(--hd-surface);
   color: var(--hd-text);
 }
 

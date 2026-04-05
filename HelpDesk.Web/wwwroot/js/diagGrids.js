@@ -88,7 +88,11 @@ window.helpdeskDiag = {
     $(el).DataTable({
       ajax: { url: apiUrl, dataSrc: '', xhrFields: { withCredentials: true } },
       order: [[5, 'desc']],
-      pageLength: 25,
+      pageLength: 10,
+      lengthMenu: [
+        [10, 20, 50, 75, 100, -1],
+        [10, 20, 50, 75, 100, 'All']
+      ],
       columns: [
         { data: 'actionType', title: 'Action' },
         {
@@ -144,7 +148,11 @@ window.helpdeskDiag = {
     $(el).DataTable({
       ajax: { url: apiUrl, dataSrc: '', xhrFields: { withCredentials: true } },
       order: [[0, 'desc']],
-      pageLength: 25,
+      pageLength: 10,
+      lengthMenu: [
+        [10, 20, 50, 75, 100, -1],
+        [10, 20, 50, 75, 100, 'All']
+      ],
       columns: [
         { data: 'id', title: 'Id' },
         {
@@ -181,7 +189,11 @@ window.helpdeskDiag = {
     $(el).DataTable({
       ajax: { url: apiUrl, dataSrc: '', xhrFields: { withCredentials: true } },
       order: [[0, 'desc']],
-      pageLength: 25,
+      pageLength: 10,
+      lengthMenu: [
+        [10, 20, 50, 75, 100, -1],
+        [10, 20, 50, 75, 100, 'All']
+      ],
       columns: [
         { data: 'id', title: 'Id' },
         {
@@ -212,7 +224,11 @@ window.helpdeskDiag = {
     $(el).DataTable({
       ajax: { url: apiUrl, dataSrc: '', xhrFields: { withCredentials: true } },
       order: [[1, 'desc']],
-      pageLength: 25,
+      pageLength: 10,
+      lengthMenu: [
+        [10, 20, 50, 75, 100, -1],
+        [10, 20, 50, 75, 100, 'All']
+      ],
       columns: [
         { data: 'id', title: 'Id' },
         { data: 'logged', title: 'Logged' },
