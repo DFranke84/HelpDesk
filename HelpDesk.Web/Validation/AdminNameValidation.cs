@@ -2,7 +2,9 @@ using System.Text;
 
 namespace HelpDesk.Web.Validation;
 
-/// <summary>Catalog identifiers: uppercase, no whitespace (enforced in UI while typing and on save).</summary>
+/// <summary>
+/// Catalog names: no whitespace (stripped in UI for applications, groups, pages). Login IDs remain uppercase via <see cref="ToUpperNoSpaces"/>.
+/// </summary>
 public static class AdminNameValidation
 {
     /// <summary>
@@ -41,6 +43,24 @@ public static class AdminNameValidation
     }
 
     /// <summary>
+    /// Remove all whitespace; preserve character casing (for application, group, and page names).
+    /// </summary>
+    /// <param name="s">Raw input text.</param>
+    /// <returns>String without whitespace characters.</returns>
+    public static string RemoveWhitespace(string? s)
+    {
+        if (string.IsNullOrEmpty(s))
+            return "";
+        var sb = new StringBuilder(s.Length);
+        foreach (var c in s)
+        {
+            if (!char.IsWhiteSpace(c))
+                sb.Append(c);
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>
     /// Return a validation error when the value contains spaces.
     /// </summary>
     /// <param name="value">Field value to inspect.</param>
@@ -56,5 +76,5 @@ public static class AdminNameValidation
     /// <param name="fieldLabel">Human-readable field name for the message.</param>
     /// <returns>Error text, or null when valid.</returns>
     public static string? ErrorIfEmptyCatalogName(string? value, string fieldLabel) =>
-        string.IsNullOrWhiteSpace(ToUpperNoSpaces(value)) ? $"{fieldLabel} is required." : null;
+        string.IsNullOrEmpty(RemoveWhitespace(value)) ? $"{fieldLabel} is required." : null;
 }

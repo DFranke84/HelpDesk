@@ -23,6 +23,10 @@ else
     {
         <nav class="hd-nav-tree">
             <a class="hd-nav-link" href="/">Dashboard</a>
+
+            <!-- Separator -->
+            <div class="hd-nav-separator"></div>
+
             <AuthorizeView Roles="Admin" Context="adminAuth">
                 <Authorized>
                     <details class="hd-nav-collapsible">
@@ -30,16 +34,24 @@ else
                         <div class="hd-nav-section-body">
                             <a class="hd-nav-link" href="/admin/application-groups">Application groups</a>
                             <a class="hd-nav-link" href="/admin/applications">Applications</a>
-                            <a class="hd-nav-link" href="/admin/change-history">Change history</a>
-                            <a class="hd-nav-link" href="/admin/nlog">NLog</a>
                             <a class="hd-nav-link" href="/admin/groups">Groups</a>
                             <a class="hd-nav-link" href="/admin/pages">Pages</a>
                             <a class="hd-nav-link" href="/admin/user-groups">User groups</a>
                             <a class="hd-nav-link" href="/admin/users">Users</a>
-                        </div>
+
+                            <!-- Separator -->
+                            <div class="hd-nav-separator-gradiant"></div>
+
+                            <a class="hd-nav-link" href="/admin/change-history">Change history</a>
+                            <a class="hd-nav-link" href="/admin/nlog">NLog</a>
+                         </div>
                     </details>
                 </Authorized>
             </AuthorizeView>
+
+            <!-- Separator -->
+            <div class="hd-nav-separator"></div>
+
             <details class="hd-nav-collapsible">
                 <summary class="hd-nav-section-summary">Applications</summary>
                 <div class="hd-nav-section-body">

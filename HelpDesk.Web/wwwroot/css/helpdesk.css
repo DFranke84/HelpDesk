@@ -340,6 +340,18 @@ a:hover {
   cursor: pointer;
 }
 
+.hd-nav-separator {
+  height: 1px;
+  background-color: #ccc;
+  margin: 8px 0;
+  pointer-events: none; /* ensures it's not clickable */
+}
+
+.hd-nav-separator-gradiant {
+  height: 1px;
+  background: linear-gradient(to right, transparent, #ccc, transparent);
+  margin: 10px 0;
+}
 /* ========== AUTH / LOGIN ========== */
 
 .hd-login-shell,

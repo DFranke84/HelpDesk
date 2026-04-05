@@ -189,7 +189,7 @@
 
     private async Task SaveAsync()
     {
-        var nameNorm = AdminNameValidation.ToUpperNoSpaces(_name);
+        var nameNorm = AdminNameValidation.RemoveWhitespace(_name);
         var nameErr = AdminNameValidation.ErrorIfEmptyCatalogName(nameNorm, "Name");
         if (nameErr is not null)
         {
@@ -237,5 +237,5 @@
     }
 
     private void OnNameInput(ChangeEventArgs e) =>
-        _name = AdminNameValidation.ToUpperNoSpaces(e.Value?.ToString());
+        _name = AdminNameValidation.RemoveWhitespace(e.Value?.ToString());
 }
