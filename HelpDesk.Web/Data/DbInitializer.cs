@@ -82,7 +82,7 @@ public static class DbInitializer
     private static async Task EnsureBooksCatalogAsync(HelpDeskDbContext db, CancellationToken ct)
     {
         const string booksGroupName = "Books";
-        const string booksAppName = "Books";
+        const string booksAppName = "BookCollection";
         const string booksCsName = "Books";
         const string booksPageName = "Books";
         const string booksRoute = "/user/books/catalog";
