@@ -86,6 +86,9 @@ public sealed class WindowsAutoLoginMiddleware
 
         if (user is null)
         {
+            // Negotiate succeeded but no matching app user exists — replace the
+            // IIS-provided Windows principal so authorization policies reject the request.
+            context.User = new ClaimsPrincipal(new ClaimsIdentity());
             await _next(context);
             return;
         }
