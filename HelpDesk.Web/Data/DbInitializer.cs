@@ -11,6 +11,7 @@ namespace HelpDesk.Web.Data;
 
 /// <summary>
 /// Startup database initialization: applies EF migrations, seeds catalog data for BOOKS, and ensures a single initial admin exists when the database has no users.
+/// Runs only when configuration <c>App:DbInit</c> is <c>true</c>.
 /// Called from <c>Program.cs</c> after the host is built: <c>await DbInitializer.MigrateAsync(app.Services);</c>
 /// </summary>
 public static class DbInitializer
@@ -24,11 +25,18 @@ public static class DbInitializer
     public static async Task MigrateAsync(IServiceProvider services, CancellationToken ct = default)
     {
         await using var scope = services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<HelpDeskDbContext>();
         var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
-        var hasher = scope.ServiceProvider.GetRequiredService<PasswordHasher<User>>();
         var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>()
             .CreateLogger(typeof(DbInitializer).FullName!);
+
+        if (!config.GetValue("App:DbInit", false))
+        {
+            logger.LogInformation("Database initialization skipped (App:DbInit is not true).");
+            return;
+        }
+
+        var db = scope.ServiceProvider.GetRequiredService<HelpDeskDbContext>();
+        var hasher = scope.ServiceProvider.GetRequiredService<PasswordHasher<User>>();
 
         try
         {
@@ -73,8 +81,8 @@ public static class DbInitializer
     /// </summary>
     private static async Task EnsureBooksCatalogAsync(HelpDeskDbContext db, CancellationToken ct)
     {
-        const string booksGroupName = "BOOKS";
-        const string booksAppName = "BOOKS";
+        const string booksGroupName = "Books";
+        const string booksAppName = "Books";
         const string booksCsName = "Books";
         const string booksPageName = "Books";
         const string booksRoute = "/user/books/catalog";
@@ -90,7 +98,7 @@ public static class DbInitializer
             group = new DeskGroup
             {
                 Name = booksGroupName,
-                Description = "Access to the BOOKS application and its pages.",
+                Description = "Access to the Books application and its pages.",
                 CreatedAt = DateTime.UtcNow
             };
             db.Groups.Add(group);
