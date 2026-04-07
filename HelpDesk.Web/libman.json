@@ -1,0 +1,31 @@
+{
+  "version": "1.0",
+  "defaultProvider": "cdnjs",
+  "libraries": [
+    {
+      "library": "twitter-bootstrap@5.3.8",
+      "destination": "wwwroot/lib/bootstrap",
+      "files": [
+        "css/bootstrap.min.css",
+        "js/bootstrap.bundle.min.js"
+      ]
+    },
+    {
+      "library": "jquery@3.7.1",
+      "destination": "wwwroot/lib/jquery",
+      "files": [ "jquery.min.js" ]
+    },
+    {
+      "provider": "jsdelivr",
+      "library": "datatables.net@1.13.8",
+      "destination": "wwwroot/lib/datatables",
+      "files": [ "js/jquery.dataTables.min.js" ]
+    },
+    {
+      "provider": "jsdelivr",
+      "library": "datatables.net-dt@1.13.8",
+      "destination": "wwwroot/lib/datatables",
+      "files": [ "css/jquery.dataTables.min.css" ]
+    }
+  ]
+}
