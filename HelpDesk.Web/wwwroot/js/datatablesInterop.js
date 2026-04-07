@@ -1,5 +1,9 @@
 if (window.jQuery && window.jQuery.fn.DataTable) {
-  window.jQuery.fn.DataTable.ext.defaults.column.render = window.jQuery.fn.DataTable.render.text();
+  var DT = window.jQuery.fn.DataTable;
+  // DataTables 1.x uses DataTable.defaults.column (not ext.defaults.column).
+  if (DT.defaults && DT.defaults.column && DT.render && DT.render.text) {
+    DT.defaults.column.render = DT.render.text();
+  }
 }
 
 window.helpdeskDataTables = {
