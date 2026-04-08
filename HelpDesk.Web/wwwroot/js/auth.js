@@ -27,10 +27,12 @@ window.helpdeskUi = {
         var el = document.getElementById(id);
         if (el) { el.focus(); resolve(); return; }
         attempts++;
-        if (attempts < 5) { setTimeout(tryFocus, 50); }
+        if (attempts < 10) { setTimeout(tryFocus, 50); }
         else { resolve(); }
       }
-      setTimeout(tryFocus, 0);
+      // rAF ensures the browser has painted the Blazor render before we attempt
+      // focus; fall back to polling if the element isn't ready yet.
+      requestAnimationFrame(tryFocus);
     });
   }
 };

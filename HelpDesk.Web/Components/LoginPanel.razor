@@ -175,6 +175,10 @@
         _lastUriForFocus = uri;
         try
         {
+            // Small delay lets any trailing StateHasChanged renders settle before
+            // we ask the browser to move focus, preventing a race against the
+            // NavRouteGuard finally-block re-render.
+            await Task.Delay(50);
             var id = _forgotMode ? "login-loginId-forgot" : "login-loginId";
             await JS.InvokeVoidAsync("helpdeskUi.focusById", id);
         }
