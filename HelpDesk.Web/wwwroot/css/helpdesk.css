@@ -611,6 +611,58 @@ a:hover {
   background: transparent;
 }
 
+/* ========== PERMISSION STATES ========== */
+
+.hd-permission-denied { 
+  opacity: 0.5; 
+  cursor: not-allowed; 
+}
+
+.hd-permission-hidden { 
+  display: none !important; 
+}
+
+.hd-permission-disabled { 
+  pointer-events: none; 
+  opacity: 0.5;
+  cursor: not-allowed !important;
+}
+
+.hd-btn.hd-permission-disabled {
+  background: #3a3a3a !important;
+  border-color: #555 !important;
+  color: #888 !important;
+}
+
+.hd-btn.primary.hd-permission-disabled {
+  background: #4a4a4a !important;
+  border-color: #666 !important;
+  color: #999 !important;
+}
+
+.hd-btn.danger.hd-permission-disabled {
+  background: #4a3030 !important;
+  border-color: #665555 !important;
+  color: #997777 !important;
+}
+
+/* ========== PERMISSION STATES ========== */
+
+.hd-permission-denied { 
+  opacity: 0.5; 
+  cursor: not-allowed; 
+}
+
+.hd-permission-hidden { 
+  display: none !important; 
+}
+
+.hd-permission-disabled { 
+  pointer-events: none; 
+  opacity: 0.6;
+  filter: grayscale(50%);
+}
+
 .hd-alert {
   background: rgba(255, 80, 80, 0.15);
   border: 1px solid rgba(255, 80, 80, 0.35);

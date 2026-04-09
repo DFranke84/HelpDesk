@@ -1,0 +1,375 @@
+@page "/admin/user-page-permissions"
+
+@attribute [Authorize(Roles = "Admin")]
+
+@implements IAsyncDisposable
+
+@using System.Security.Claims
+@using HelpDesk.Models
+@using HelpDesk.Models.Data
+@using HelpDesk.Web.Services
+@using Microsoft.AspNetCore.Components
+
+@inject IDbContextFactory<HelpDeskDbContext> DbFactory
+@inject IPagePermissionService PagePermissionService
+@inject IMenuService MenuService
+@inject IStatusBarService StatusBar
+@inject IJSRuntime JS
+
+<PageTitle>User Page Permissions</PageTitle>
+
+<div class="hd-admin-page">
+    <h1>User Page Permissions</h1>
+    <p class="muted">Manage CRUD permissions for users on their accessible pages. Only non-admin users are shown.</p>
+    
+    <div class="hd-admin-toolbar">
+        <div class="form-row" style="display: inline-flex; gap: 1rem; align-items: center;">
+            <label>Filter by User:</label>
+            <select class="hd-input" @bind="_selectedUserId" @oninput="OnUserFilterChanged" style="width: 200px;">
+                <option value="0">All Users</option>
+                @foreach (var user in _users)
+                {
+                    <option value="@user.Id">@user.LoginId (@user.FirstName @user.LastName)</option>
+                }
+            </select>
+            
+            <label>Filter by Application:</label>
+            <select class="hd-input" @bind="_selectedAppId" @oninput="OnAppFilterChanged" style="width: 200px;">
+                <option value="0">All Applications</option>
+                @foreach (var app in _applications)
+                {
+                    <option value="@app.Id">@app.Name</option>
+                }
+            </select>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <p>Loading permissions...</p>
+    }
+    else if (!_userPageData.Any())
+    {
+        <div class="hd-card">
+            <p>No users with page access found. Users need group membership to access application pages before permissions can be assigned.</p>
+        </div>
+    }
+    else
+    {
+        <div class="hd-card" style="overflow-x: auto;">
+            <table class="hd-permissions-table">
+                <thead>
+                    <tr>
+                        <th>User</th>
+                        <th>Application</th>
+                        <th>Page</th>
+                        <th>Create</th>
+                        <th>Read</th>
+                        <th>Update</th>
+                        <th>Delete</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in _userPageData)
+                    {
+                        <tr>
+                            <td>@item.User.LoginId</td>
+                            <td>@item.Application.Name</td>
+                            <td>@item.Page.Name</td>
+                            <td>
+                                <input type="checkbox" 
+                                       checked="@item.Permissions.CanCreate" 
+                                       @onchange="@(e => OnPermissionChanged(item, CrudAction.Create, (bool)e.Value!))" />
+                            </td>
+                            <td>
+                                <input type="checkbox" 
+                                       checked="@item.Permissions.CanRead" 
+                                       @onchange="@(e => OnPermissionChanged(item, CrudAction.Read, (bool)e.Value!))" />
+                            </td>
+                            <td>
+                                <input type="checkbox" 
+                                       checked="@item.Permissions.CanUpdate" 
+                                       @onchange="@(e => OnPermissionChanged(item, CrudAction.Update, (bool)e.Value!))" />
+                            </td>
+                            <td>
+                                <input type="checkbox" 
+                                       checked="@item.Permissions.CanDelete" 
+                                       @onchange="@(e => OnPermissionChanged(item, CrudAction.Delete, (bool)e.Value!))" />
+                            </td>
+                            <td>
+                                <button type="button" class="hd-btn sm" @onclick="@(() => GrantAllPermissions(item))">
+                                    Grant All
+                                </button>
+                                <button type="button" class="hd-btn sm danger" @onclick="@(() => RemoveAllPermissions(item))">
+                                    Remove All
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        
+        <div style="margin-top: 1rem;">
+            <button type="button" class="hd-btn primary" @onclick="SaveAllChangesAsync" disabled="@(!_hasChanges)">
+                Save All Changes (@_pendingChanges.Count)
+            </button>
+            @if (_hasChanges)
+            {
+                <span class="muted" style="margin-left: 1rem;">
+                    You have unsaved changes. Click "Save All Changes" to apply them.
+                </span>
+            }
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(_msg))
+    {
+        <p class="muted">@_msg</p>
+    }
+</div>
+
+@code {
+    private List<User> _users = new();
+    private List<DeskApplication> _applications = new();
+    private List<UserPagePermissionItem> _userPageData = new();
+    private Dictionary<string, PagePermissions> _pendingChanges = new();
+    private bool _loading = true;
+    private bool _hasChanges = false;
+    private string? _msg;
+    
+    private int _selectedUserId = 0;
+    private int _selectedAppId = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _loading = true;
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        // Load non-admin users
+        _users = await db.Users.AsNoTracking()
+            .Where(u => u.IsActive && u.Role != UserRole.Admin)
+            .OrderBy(u => u.LoginId)
+            .ToListAsync();
+
+        // Load active applications
+        _applications = await db.Applications.AsNoTracking()
+            .Where(a => a.IsActive)
+            .OrderBy(a => a.Name)
+            .ToListAsync();
+
+        await LoadUserPageDataAsync();
+        _loading = false;
+    }
+
+    private async Task LoadUserPageDataAsync()
+    {
+        _userPageData.Clear();
+        _pendingChanges.Clear();
+        _hasChanges = false;
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        // Get users with their accessible pages through group membership
+        var query = from u in db.Users.AsNoTracking()
+                    join ug in db.UserGroups.AsNoTracking() on u.Id equals ug.UserId
+                    join g in db.Groups.AsNoTracking() on ug.GroupId equals g.Id
+                    join ag in db.DeskApplicationGroups.AsNoTracking() on g.Id equals ag.DeskGroupId
+                    join a in db.Applications.AsNoTracking() on ag.DeskApplicationId equals a.Id
+                    join p in db.Pages.AsNoTracking() on a.Id equals p.DeskApplicationId
+                    where u.IsActive && u.Role != UserRole.Admin && a.IsActive && p.IsActive
+                    select new { User = u, Application = a, Page = p };
+
+        // Apply filters
+        if (_selectedUserId > 0)
+            query = query.Where(x => x.User.Id == _selectedUserId);
+            
+        if (_selectedAppId > 0)
+            query = query.Where(x => x.Application.Id == _selectedAppId);
+
+        var accessiblePages = await query
+            .OrderBy(x => x.User.LoginId)
+            .ThenBy(x => x.Application.Name)
+            .ThenBy(x => x.Page.DisplayOrder)
+            .ThenBy(x => x.Page.Name)
+            .ToListAsync();
+
+        // Get existing permissions for all user-page combinations
+        var userIds = accessiblePages.Select(x => x.User.Id).Distinct().ToList();
+        var pageIds = accessiblePages.Select(x => x.Page.Id).Distinct().ToList();
+        
+        var existingPermissions = await db.UserPagePermissions.AsNoTracking()
+            .Where(upp => userIds.Contains(upp.UserId) && pageIds.Contains(upp.PageId))
+            .ToListAsync();
+
+        var permissionLookup = existingPermissions.ToDictionary(
+            upp => $"{upp.UserId}_{upp.PageId}",
+            upp => new PagePermissions
+            {
+                CanCreate = upp.CanCreate,
+                CanRead = upp.CanRead,
+                CanUpdate = upp.CanUpdate,
+                CanDelete = upp.CanDelete
+            });
+
+        // Create display items
+        foreach (var item in accessiblePages)
+        {
+            var key = $"{item.User.Id}_{item.Page.Id}";
+            var permissions = permissionLookup.ContainsKey(key) 
+                ? permissionLookup[key] 
+                : new PagePermissions(); // Default: no permissions
+
+            _userPageData.Add(new UserPagePermissionItem
+            {
+                User = item.User,
+                Application = item.Application,
+                Page = item.Page,
+                Permissions = permissions
+            });
+        }
+    }
+
+    private async Task OnUserFilterChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var userId))
+        {
+            _selectedUserId = userId;
+            await LoadUserPageDataAsync();
+        }
+    }
+
+    private async Task OnAppFilterChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var appId))
+        {
+            _selectedAppId = appId;
+            await LoadUserPageDataAsync();
+        }
+    }
+
+    private void OnPermissionChanged(UserPagePermissionItem item, CrudAction action, bool granted)
+    {
+        var key = $"{item.User.Id}_{item.Page.Id}";
+        
+        // Update the display permissions
+        switch (action)
+        {
+            case CrudAction.Create:
+                item.Permissions.CanCreate = granted;
+                break;
+            case CrudAction.Read:
+                item.Permissions.CanRead = granted;
+                break;
+            case CrudAction.Update:
+                item.Permissions.CanUpdate = granted;
+                break;
+            case CrudAction.Delete:
+                item.Permissions.CanDelete = granted;
+                break;
+        }
+
+        // Apply permission hierarchy rules
+        item.Permissions.ApplyPermissionHierarchy();
+
+        // Track the change
+        _pendingChanges[key] = new PagePermissions
+        {
+            CanCreate = item.Permissions.CanCreate,
+            CanRead = item.Permissions.CanRead,
+            CanUpdate = item.Permissions.CanUpdate,
+            CanDelete = item.Permissions.CanDelete
+        };
+
+        _hasChanges = _pendingChanges.Any();
+    }
+
+    private void GrantAllPermissions(UserPagePermissionItem item)
+    {
+        OnPermissionChanged(item, CrudAction.Create, true);
+        OnPermissionChanged(item, CrudAction.Update, true);
+        OnPermissionChanged(item, CrudAction.Delete, true);
+        // Read will be automatically granted by hierarchy rules
+    }
+
+    private void RemoveAllPermissions(UserPagePermissionItem item)
+    {
+        OnPermissionChanged(item, CrudAction.Read, false);
+        // All other permissions will be automatically removed by hierarchy rules
+    }
+
+    private async Task SaveAllChangesAsync()
+    {
+        try
+        {
+            foreach (var change in _pendingChanges)
+            {
+                var parts = change.Key.Split('_');
+                var userId = int.Parse(parts[0]);
+                var pageId = int.Parse(parts[1]);
+
+                await PagePermissionService.SetUserPagePermissionsAsync(userId, pageId, change.Value);
+            }
+
+            _pendingChanges.Clear();
+            _hasChanges = false;
+            _msg = $"Successfully saved permissions for {_pendingChanges.Count} user-page combinations.";
+            StatusBar.SetMessage("Permissions saved successfully.");
+        }
+        catch (Exception ex)
+        {
+            _msg = $"Error saving permissions: {ex.Message}";
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        // No resources to dispose
+    }
+
+    private class UserPagePermissionItem
+    {
+        public User User { get; set; } = null!;
+        public DeskApplication Application { get; set; } = null!;
+        public DeskPage Page { get; set; } = null!;
+        public PagePermissions Permissions { get; set; } = new();
+    }
+}
+
+<style>
+.hd-permissions-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+}
+
+.hd-permissions-table th,
+.hd-permissions-table td {
+    padding: 0.5rem;
+    border: 1px solid var(--hd-border);
+    text-align: left;
+}
+
+.hd-permissions-table th {
+    background: var(--hd-surface-2);
+    font-weight: 600;
+}
+
+.hd-permissions-table td {
+    background: var(--hd-surface);
+}
+
+.hd-permissions-table input[type="checkbox"] {
+    margin: 0;
+}
+
+.hd-permissions-table .hd-btn {
+    margin-right: 0.25rem;
+}
+</style>

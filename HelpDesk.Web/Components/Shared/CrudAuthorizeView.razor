@@ -1,0 +1,68 @@
+@using HelpDesk.Web.Services
+@using System.Security.Claims
+@inject IPagePermissionService PagePermissionService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+@if (_isAuthorized)
+{
+    @Authorized
+}
+else if (NotAuthorized != null)
+{
+    @NotAuthorized
+}
+
+@code {
+    [Parameter, EditorRequired] public int PageId { get; set; }
+    [Parameter, EditorRequired] public CrudAction Action { get; set; }
+    
+    [Parameter] public RenderFragment? Authorized { get; set; }
+    [Parameter] public RenderFragment? NotAuthorized { get; set; }
+    
+    private bool _isAuthorized = false;
+    private bool _initialized = false;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!_initialized || _lastPageId != PageId || _lastAction != Action)
+        {
+            _lastPageId = PageId;
+            _lastAction = Action;
+            await CheckAuthorizationAsync();
+            _initialized = true;
+        }
+    }
+
+    private int _lastPageId;
+    private CrudAction _lastAction;
+
+    private async Task CheckAuthorizationAsync()
+    {
+        try
+        {
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (!user.Identity?.IsAuthenticated ?? true)
+            {
+                _isAuthorized = false;
+                return;
+            }
+
+            // Get user ID from claims
+            var userIdClaim = user.FindFirst(ClaimTypes.NameIdentifier);
+            if (!int.TryParse(userIdClaim?.Value, out var userId))
+            {
+                _isAuthorized = false;
+                return;
+            }
+
+            // Check permission
+            _isAuthorized = await PagePermissionService.CanUserPerformActionAsync(userId, PageId, Action);
+        }
+        catch
+        {
+            _isAuthorized = false;
+        }
+    }
+}

@@ -30,6 +30,7 @@ public sealed class HelpDeskDbContext : DbContext
     public DbSet<DeskGroup> Groups => Set<DeskGroup>();
     public DbSet<DeskApplicationGroup> DeskApplicationGroups => Set<DeskApplicationGroup>();
     public DbSet<UserGroup> UserGroups => Set<UserGroup>();
+    public DbSet<UserPagePermission> UserPagePermissions => Set<UserPagePermission>();
     public DbSet<NLogEntry> NLogEntries => Set<NLogEntry>();
     public DbSet<EntityChangeHistory> EntityChangeHistories => Set<EntityChangeHistory>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
@@ -140,6 +141,7 @@ public sealed class HelpDeskDbContext : DbContext
             DeskGroup g => g.Id.ToString(),
             DeskApplicationGroup ag => $"{ag.DeskApplicationId}:{ag.DeskGroupId}",
             UserGroup ug => $"{ug.UserId}:{ug.GroupId}",
+            UserPagePermission upp => $"{upp.UserId}:{upp.PageId}",
             _ => ""
         };
     }
@@ -167,6 +169,9 @@ public sealed class HelpDeskDbContext : DbContext
                 break;
             case UserGroup:
                 entityType = TrackedEntityType.UserGroup;
+                break;
+            case UserPagePermission:
+                entityType = TrackedEntityType.UserPagePermission;
                 break;
             default:
                 return false;
@@ -314,6 +319,36 @@ public sealed class HelpDeskDbContext : DbContext
             e.HasOne(x => x.Group)
                 .WithMany(g => g.UserGroups)
                 .HasForeignKey(x => x.GroupId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<UserPagePermission>(e =>
+        {
+            e.ToTable("UserPagePermissions");
+            e.HasKey(x => new { x.UserId, x.PageId });
+            e.Property(x => x.RowVersion).IsRowVersion();
+            e.HasOne(x => x.User)
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.DeskPage)
+                .WithMany()
+                .HasForeignKey(x => x.PageId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<UserPagePermission>(e =>
+        {
+            e.ToTable("UserPagePermissions");
+            e.HasKey(x => new { x.UserId, x.PageId });
+            e.Property(x => x.RowVersion).IsRowVersion();
+            e.HasOne(x => x.User)
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.DeskPage)
+                .WithMany()
+                .HasForeignKey(x => x.PageId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

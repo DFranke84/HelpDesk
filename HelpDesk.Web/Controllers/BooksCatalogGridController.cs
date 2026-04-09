@@ -1,4 +1,6 @@
 using HelpDesk.Models.Data;
+using HelpDesk.Web.Authorization;
+using HelpDesk.Web.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -27,10 +29,12 @@ public sealed class BooksCatalogGridController : ControllerBase
     /// <summary>
     /// List books for the catalog grid.
     /// </summary>
+    /// <param name="pageId">The page ID for permission checking (optional for backward compatibility).</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>JSON rows for books.</returns>
     [HttpGet("catalog")]
-    public async Task<IActionResult> Catalog(CancellationToken ct)
+    [PageReadAuthorize(PageIdParameter = "pageId")]
+    public async Task<IActionResult> Catalog([FromQuery] int? pageId, CancellationToken ct)
     {
         var rows = await _db.Books.AsNoTracking()
             .OrderBy(b => b.Title)

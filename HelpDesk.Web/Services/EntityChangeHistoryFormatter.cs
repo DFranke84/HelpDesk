@@ -67,6 +67,14 @@ public static class EntityChangeHistoryFormatter
                         groupIds.Add(dagGrp);
                     }
                     break;
+                case var t when Matches(t, TrackedEntityType.UserPagePermission):
+                    var uppParts = h.EntityId.Split(':');
+                    if (uppParts.Length == 2 && int.TryParse(uppParts[0], out var uppUser) && int.TryParse(uppParts[1], out var uppPage))
+                    {
+                        userEntityIds.Add(uppUser);
+                        pageIds.Add(uppPage);
+                    }
+                    break;
             }
         }
 
@@ -163,6 +171,15 @@ public static class EntityChangeHistoryFormatter
             if (agParts2.Length == 2 && int.TryParse(agParts2[0], out var linkAppId) && int.TryParse(agParts2[1], out var linkGrpId)
                 && appsMap.TryGetValue(linkAppId, out var linkApp) && groupsMap.TryGetValue(linkGrpId, out var linkGrp))
                 return $"{linkApp.Name} / {linkGrp.Name}";
+            return h.EntityId;
+        }
+
+        if (Matches(t, TrackedEntityType.UserPagePermission))
+        {
+            var uppParts2 = h.EntityId.Split(':');
+            if (uppParts2.Length == 2 && int.TryParse(uppParts2[0], out var permUser) && int.TryParse(uppParts2[1], out var permPage)
+                && usersMap.TryGetValue(permUser, out var permU) && pagesMap.TryGetValue(permPage, out var permP))
+                return $"{UserDisplayName.Format(permU)} → {FormatPageLabel(permP)}";
             return h.EntityId;
         }
 

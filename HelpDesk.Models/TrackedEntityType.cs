@@ -9,5 +9,6 @@ public static class TrackedEntityType
     public const string DeskGroup = nameof(DeskGroup);
     public const string UserGroup = nameof(UserGroup);
     public const string DeskApplicationGroup = nameof(DeskApplicationGroup);
+    public const string UserPagePermission = nameof(UserPagePermission);
 }
 

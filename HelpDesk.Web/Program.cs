@@ -25,10 +25,12 @@ if (builder.Environment.IsDevelopment())
     builder.Logging.AddConsole();
 
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddMemoryCache();
 builder.Services.AddScoped<ICurrentUserContext, HttpCurrentUserContext>();
 builder.Services.AddScoped<ICorrelationContext, CorrelationContext>();
 builder.Services.AddScoped<EventLogManager>();
 builder.Services.AddScoped<IMenuService, MenuService>();
+builder.Services.AddScoped<IPagePermissionService, PagePermissionService>();
 builder.Services.AddSingleton<IMenuRefreshNotifier, MenuRefreshNotifier>();
 builder.Services.AddScoped<IStatusBarService, StatusBarService>();
 builder.Services.AddScoped<PasswordResetService>();
