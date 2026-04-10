@@ -71,6 +71,8 @@ public sealed class AdminCatalogGridController : ControllerBase
                 p.Url,
                 openInNewTab = p.OpenInNewTab,
                 displayOrder = p.DisplayOrder,
+                pageType = p.PageType.ToString(),
+                separatorText = p.SeparatorText,
                 p.IsActive
             })
             .ToListAsync(ct)

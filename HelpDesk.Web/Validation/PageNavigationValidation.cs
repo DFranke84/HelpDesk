@@ -1,3 +1,5 @@
+using HelpDesk.Models;
+
 namespace HelpDesk.Web.Validation;
 
 /// <summary>
@@ -53,6 +55,57 @@ public static class PageNavigationValidation
             
         if (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
             return "URL must use HTTP or HTTPS protocol.";
+            
+        return null;
+    }
+
+    /// <summary>
+    /// Validates that separators don't have navigation properties (Route or Url).
+    /// </summary>
+    /// <param name="pageType">The page type.</param>
+    /// <param name="route">The route value.</param>
+    /// <param name="url">The url value.</param>
+    /// <returns>Error text, or null when valid.</returns>
+    public static string? ErrorIfSeparatorHasNavigation(PageType pageType, string? route, string? url)
+    {
+        if (pageType != PageType.Page)
+        {
+            var hasRoute = !string.IsNullOrWhiteSpace(route);
+            var hasUrl = !string.IsNullOrWhiteSpace(url);
+            
+            if (hasRoute || hasUrl)
+                return "Separators cannot have Route or URL values.";
+        }
+        
+        return null;
+    }
+
+    /// <summary>
+    /// Validates that SeparatorText is only used with ShadedSeparator type.
+    /// </summary>
+    /// <param name="pageType">The page type.</param>
+    /// <param name="separatorText">The separator text value.</param>
+    /// <returns>Error text, or null when valid.</returns>
+    public static string? ErrorIfSeparatorTextOnWrongType(PageType pageType, string? separatorText)
+    {
+        var hasText = !string.IsNullOrWhiteSpace(separatorText);
+        
+        if (hasText && pageType != PageType.ShadedSeparator)
+            return "Separator text can only be set for Shaded Separator type.";
+            
+        return null;
+    }
+
+    /// <summary>
+    /// Validates that OpenInNewTab is not set for separators.
+    /// </summary>
+    /// <param name="pageType">The page type.</param>
+    /// <param name="openInNewTab">The open in new tab flag.</param>
+    /// <returns>Error text, or null when valid.</returns>
+    public static string? ErrorIfSeparatorWithNewTab(PageType pageType, bool openInNewTab)
+    {
+        if (pageType != PageType.Page && openInNewTab)
+            return "Open in New Tab cannot be set for separators.";
             
         return null;
     }

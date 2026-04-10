@@ -278,11 +278,16 @@ public sealed class HelpDeskDbContext : DbContext
             e.ToTable("Pages");
             e.Property(x => x.Name).HasMaxLength(200);
             e.Property(x => x.Route).HasMaxLength(500);
+            e.Property(x => x.SeparatorText).HasMaxLength(200);
             e.Property(x => x.RowVersion).IsRowVersion();
             e.HasOne(x => x.DeskApplication)
                 .WithMany()
                 .HasForeignKey(x => x.DeskApplicationId)
                 .OnDelete(DeleteBehavior.Cascade);
+            
+            // Add check constraint to ensure separators don't have routes/URLs
+            e.HasCheckConstraint("CK_Pages_Separator_NoNavigation", 
+                "([PageType] = 0) OR ([Route] IS NULL AND [Url] IS NULL)");
         });
 
         modelBuilder.Entity<DeskGroup>(e =>

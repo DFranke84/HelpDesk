@@ -67,6 +67,28 @@
             <div class="form-row"><label>Name</label><input class="hd-input" value="@_name" @oninput="OnNameInput" autocomplete="off" /></div>
             
             <div class="form-row">
+                <label>Page Type</label>
+                <select class="hd-input" value="@_pageType" @onchange="OnPageTypeChanged">
+                    <option value="@PageType.Page">Regular Page</option>
+                    <option value="@PageType.GradientSeparator">Gradient Separator</option>
+                    <option value="@PageType.ShadedSeparator">Shaded Separator</option>
+                </select>
+            </div>
+
+            @if (_pageType == PageType.ShadedSeparator)
+            {
+                <div class="form-row">
+                    <label>Separator Text</label>
+                    <input class="hd-input" @bind="_separatorText" placeholder="Optional text for grouping" autocomplete="off" />
+                    <div class="muted" style="font-size: 0.85em; margin-top: 0.25rem;">
+                        Optional text to display in the separator for visual grouping
+                    </div>
+                </div>
+            }
+            
+            @if (_pageType == PageType.Page)
+            {
+            <div class="form-row">
                 <label>Navigation</label>
                 <div style="margin-top: 0.5rem;">
                     <label style="display: block; margin-bottom: 0.5rem;">
@@ -101,6 +123,7 @@
                     </div>
                 </label>
             }
+            }
             
             <div class="form-row"><label>Display order</label><input class="hd-input" @bind="_order" /></div>
             <label><input type="checkbox" @bind="_active" /> Active</label>
@@ -131,6 +154,8 @@
     private bool _openInNewTab;
     private int _order;
     private bool _active = true;
+    private PageType _pageType = PageType.Page;
+    private string _separatorText = "";
     private string? _msg;
 
     protected override async Task OnInitializedAsync() => await ReloadAppsAsync();
@@ -180,6 +205,8 @@
         _openInNewTab = false;
         _order = 0;
         _active = true;
+        _pageType = PageType.Page;
+        _separatorText = "";
     }
 
     private void OpenAdd()
@@ -213,6 +240,8 @@
         _openInNewTab = p.OpenInNewTab;
         _order = p.DisplayOrder;
         _active = p.IsActive;
+        _pageType = p.PageType;
+        _separatorText = p.SeparatorText ?? "";
         _modalOpen = true;
         _msg = null;
         await InvokeAsync(StateHasChanged);
@@ -321,6 +350,28 @@
             return;
         }
 
+        // Validate separator-specific rules
+        var separatorNavErr = PageNavigationValidation.ErrorIfSeparatorHasNavigation(_pageType, _route, _url);
+        if (separatorNavErr is not null)
+        {
+            _msg = separatorNavErr;
+            return;
+        }
+
+        var separatorTextErr = PageNavigationValidation.ErrorIfSeparatorTextOnWrongType(_pageType, _separatorText);
+        if (separatorTextErr is not null)
+        {
+            _msg = separatorTextErr;
+            return;
+        }
+
+        var separatorNewTabErr = PageNavigationValidation.ErrorIfSeparatorWithNewTab(_pageType, _openInNewTab);
+        if (separatorNewTabErr is not null)
+        {
+            _msg = separatorNewTabErr;
+            return;
+        }
+
         await using var db = await DbFactory.CreateDbContextAsync();
 
         if (_editingId is { } pid)
@@ -340,6 +391,8 @@
             p.OpenInNewTab = _openInNewTab;
             p.DisplayOrder = _order;
             p.IsActive = _active;
+            p.PageType = _pageType;
+            p.SeparatorText = string.IsNullOrWhiteSpace(_separatorText) ? null : _separatorText.Trim();
             p.UpdatedAt = DateTime.UtcNow;
         }
         else
@@ -354,6 +407,8 @@
                 OpenInNewTab = _openInNewTab,
                 DisplayOrder = _order,
                 IsActive = _active,
+                PageType = _pageType,
+                SeparatorText = string.IsNullOrWhiteSpace(_separatorText) ? null : _separatorText.Trim(),
                 CreatedAt = DateTime.UtcNow
             });
         }
@@ -371,6 +426,28 @@
 
     private void OnNameInput(ChangeEventArgs e) =>
         _name = AdminNameValidation.RemoveWhitespace(e.Value?.ToString());
+
+    private void OnPageTypeChanged(ChangeEventArgs e)
+    {
+        if (Enum.TryParse<PageType>(e.Value?.ToString(), out var pageType))
+        {
+            _pageType = pageType;
+            
+            // Clear navigation fields for separators
+            if (_pageType != PageType.Page)
+            {
+                _route = "";
+                _url = "";
+                _openInNewTab = false;
+            }
+            
+            // Clear separator text for non-shaded separators
+            if (_pageType != PageType.ShadedSeparator)
+            {
+                _separatorText = "";
+            }
+        }
+    }
 
     private void OnNavTypeChanged(ChangeEventArgs e)
     {

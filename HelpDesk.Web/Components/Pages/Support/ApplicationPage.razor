@@ -18,7 +18,7 @@
 @if (_needsToOpenNewTab && !string.IsNullOrEmpty(_urlToOpen))
 {
     <div class="hd-card">
-        <h3>@_page.Name</h3>
+        <h3>@(_page?.Name ?? "Page")</h3>
         <p>This page opens in a new browser tab:</p>
         <p><a href="@_urlToOpen" target="_blank" rel="noopener noreferrer" class="btn btn-primary">Open @_urlToOpen</a></p>
     </div>
@@ -137,6 +137,13 @@ else
         }
 
         _title = _page.Name;
+
+        // Separators are not navigable - redirect to dashboard
+        if (_page.PageType != PageType.Page)
+        {
+            Nav.NavigateTo("/");
+            return;
+        }
 
         var authState = await AuthState.GetAuthenticationStateAsync();
         var user = authState.User;

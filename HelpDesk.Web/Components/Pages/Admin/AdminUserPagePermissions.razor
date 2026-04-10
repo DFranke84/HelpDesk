@@ -183,7 +183,7 @@
                     join ag in db.DeskApplicationGroups.AsNoTracking() on g.Id equals ag.DeskGroupId
                     join a in db.Applications.AsNoTracking() on ag.DeskApplicationId equals a.Id
                     join p in db.Pages.AsNoTracking() on a.Id equals p.DeskApplicationId
-                    where u.IsActive && u.Role != UserRole.Admin && a.IsActive && p.IsActive
+                    where u.IsActive && u.Role != UserRole.Admin && a.IsActive && p.IsActive && p.PageType == PageType.Page
                     select new { User = u, Application = a, Page = p };
 
         // Apply filters

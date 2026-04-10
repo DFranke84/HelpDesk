@@ -144,6 +144,9 @@ namespace HelpDesk.Models.Migrations
                     b.Property<bool>("OpenInNewTab")
                         .HasColumnType("bit");
 
+                    b.Property<int>("PageType")
+                        .HasColumnType("int");
+
                     b.Property<string>("Route")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
@@ -152,6 +155,10 @@ namespace HelpDesk.Models.Migrations
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
+
+                    b.Property<string>("SeparatorText")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
@@ -164,7 +171,10 @@ namespace HelpDesk.Models.Migrations
 
                     b.HasIndex("DeskApplicationId");
 
-                    b.ToTable("Pages", (string)null);
+                    b.ToTable("Pages", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Pages_Separator_NoNavigation", "([PageType] = 0) OR ([Route] IS NULL AND [Url] IS NULL)");
+                        });
                 });
 
             modelBuilder.Entity("HelpDesk.Models.EntityChangeHistory", b =>

@@ -82,7 +82,23 @@ else
                                         {
                                             @foreach (var p in pages)
                                             {
-                                                <a class="hd-nav-link" href="@GetPageHref(app.Id, p.Id)">@p.Name</a>
+                                                @if (p.PageType == PageType.Page)
+                                                {
+                                                    <a class="hd-nav-link" href="@GetPageHref(app.Id, p.Id)">@p.Name</a>
+                                                }
+                                                else if (p.PageType == PageType.GradientSeparator)
+                                                {
+                                                    <div class="hd-nav-separator-gradiant"></div>
+                                                }
+                                                else if (p.PageType == PageType.ShadedSeparator)
+                                                {
+                                                    <div class="hd-nav-separator-shaded">
+                                                        @if (!string.IsNullOrWhiteSpace(p.SeparatorText))
+                                                        {
+                                                            @p.SeparatorText
+                                                        }
+                                                    </div>
+                                                }
                                             }
                                         }
                                     </div>
