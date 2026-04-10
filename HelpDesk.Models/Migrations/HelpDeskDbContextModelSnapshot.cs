@@ -36,6 +36,9 @@ namespace HelpDesk.Models.Migrations
                     b.Property<string>("Description")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
                     b.Property<string>("ExternalConnectionStringName")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
@@ -138,8 +141,10 @@ namespace HelpDesk.Models.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<bool>("OpenInNewTab")
+                        .HasColumnType("bit");
+
                     b.Property<string>("Route")
-                        .IsRequired()
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
@@ -150,6 +155,10 @@ namespace HelpDesk.Models.Migrations
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("Url")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.HasKey("Id");
 

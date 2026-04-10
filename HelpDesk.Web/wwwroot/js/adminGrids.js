@@ -113,8 +113,9 @@ window.helpdeskAdmin = {
 
   initApplications: function (tableId, apiUrl) {
     this._dtBase(tableId, apiUrl, {
-      order: [[0, 'asc']],
+      order: [[1, 'asc']],
       columns: [
+        { data: 'displayOrder', title: 'Order' },
         { data: 'name', title: 'Name' },
         {
           data: 'externalKey',
@@ -165,7 +166,19 @@ window.helpdeskAdmin = {
       columns: [
         { data: 'applicationName', title: 'Application' },
         { data: 'name', title: 'Name' },
-        { data: 'route', title: 'Route' },
+        {
+          data: null,
+          title: 'Navigation',
+          render: function (data, type, row) {
+            if (row.url) {
+              return '<code>' + row.url + '</code>' + (row.openInNewTab ? ' <span class="muted">(new tab)</span>' : ' <span class="muted">(embedded)</span>');
+            } else if (row.route) {
+              return '<code>' + row.route + '</code> <span class="muted">(route)</span>';
+            } else {
+              return '<span class="muted">None</span>';
+            }
+          }
+        },
         { data: 'displayOrder', title: 'Order' },
         {
           data: 'isActive',

@@ -10,8 +10,13 @@ public sealed class DeskPage
     [Required, MaxLength(200)]
     public string Name { get; set; } = string.Empty;
 
-    [Required, MaxLength(500)]
-    public string Route { get; set; } = string.Empty;
+    [MaxLength(500)]
+    public string? Route { get; set; }
+
+    [MaxLength(500)]
+    public string? Url { get; set; }
+
+    public bool OpenInNewTab { get; set; }
 
     public int DisplayOrder { get; set; }
 

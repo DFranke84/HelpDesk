@@ -20,6 +20,8 @@ public sealed class DeskApplication
 
     public bool IsActive { get; set; } = true;
 
+    public int DisplayOrder { get; set; }
+
     public DateTime CreatedAt { get; set; }
 
     public DateTime? UpdatedAt { get; set; }

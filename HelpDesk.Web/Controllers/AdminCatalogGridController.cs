@@ -35,12 +35,13 @@ public sealed class AdminCatalogGridController : ControllerBase
     public async Task<IActionResult> Applications(CancellationToken ct)
     {
         var rows = await _db.Applications.AsNoTracking()
-            .OrderBy(a => a.Name)
+            .OrderBy(a => a.DisplayOrder).ThenBy(a => a.Name)
             .Take(1000)
             .Select(a => new
             {
                 a.Id,
                 a.Name,
+                displayOrder = a.DisplayOrder,
                 externalKey = a.ExternalConnectionStringName,
                 usesExternalDatabase = a.UsesExternalDatabase,
                 a.IsActive
@@ -67,6 +68,8 @@ public sealed class AdminCatalogGridController : ControllerBase
                 applicationName = p.DeskApplication!.Name,
                 p.Name,
                 p.Route,
+                p.Url,
+                openInNewTab = p.OpenInNewTab,
                 displayOrder = p.DisplayOrder,
                 p.IsActive
             })

@@ -27,7 +27,7 @@ public class MenuService : IMenuService
     /// <param name="userId">Current user id.</param>
     /// <param name="isAdmin">Whether the user is an administrator.</param>
     /// <param name="ct">Cancellation token.</param>
-    /// <returns>Applications ordered by name.</returns>
+    /// <returns>Applications ordered by display order, then name.</returns>
     public async Task<List<DeskApplication>> GetAccessibleApplicationsAsync(int userId, bool isAdmin, CancellationToken ct = default)
     {
         await using var db = await _factory.CreateDbContextAsync(ct).ConfigureAwait(false);
@@ -36,7 +36,7 @@ public class MenuService : IMenuService
         {
             return await db.Applications.AsNoTracking()
                 .Where(a => a.IsActive)
-                .OrderBy(a => a.Name)
+                .OrderBy(a => a.DisplayOrder).ThenBy(a => a.Name)
                 .ToListAsync(ct)
                 .ConfigureAwait(false);
         }
@@ -49,7 +49,7 @@ public class MenuService : IMenuService
 
         return await db.Applications.AsNoTracking()
             .Where(a => a.IsActive && a.ApplicationGroups.Any(ag => groupIds.Contains(ag.DeskGroupId)))
-            .OrderBy(a => a.Name)
+            .OrderBy(a => a.DisplayOrder).ThenBy(a => a.Name)
             .ToListAsync(ct)
             .ConfigureAwait(false);
     }

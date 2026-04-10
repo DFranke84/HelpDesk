@@ -65,7 +65,43 @@
                 </select>
             </div>
             <div class="form-row"><label>Name</label><input class="hd-input" value="@_name" @oninput="OnNameInput" autocomplete="off" /></div>
-            <div class="form-row"><label>Route</label><input class="hd-input" @bind="_route" /></div>
+            
+            <div class="form-row">
+                <label>Navigation</label>
+                <div style="margin-top: 0.5rem;">
+                    <label style="display: block; margin-bottom: 0.5rem;">
+                        <input type="radio" name="nav-type" value="route" checked="@(!string.IsNullOrWhiteSpace(_route))" @onchange="OnNavTypeChanged" />
+                        Internal Route
+                    </label>
+                    <label style="display: block; margin-bottom: 0.5rem;">
+                        <input type="radio" name="nav-type" value="url" checked="@(!string.IsNullOrWhiteSpace(_url))" @onchange="OnNavTypeChanged" />
+                        External URL
+                    </label>
+                    <label style="display: block;">
+                        <input type="radio" name="nav-type" value="none" checked="@(string.IsNullOrWhiteSpace(_route) && string.IsNullOrWhiteSpace(_url))" @onchange="OnNavTypeChanged" />
+                        None (content in main window)
+                    </label>
+                </div>
+            </div>
+            
+            @if (!string.IsNullOrWhiteSpace(_route))
+            {
+                <div class="form-row"><label>Route</label><input class="hd-input" @bind="_route" /></div>
+            }
+            
+            @if (!string.IsNullOrWhiteSpace(_url))
+            {
+                <div class="form-row"><label>URL</label><input class="hd-input" @bind="_url" /></div>
+                <label style="margin-top: 0.5rem;">
+                    <input type="checkbox" @bind="_openInNewTab" /> 
+                    Open in new tab
+                    <div class="muted" style="margin-left: 1.5rem; font-size: 0.85em;">
+                        Unchecked: URL content is embedded within the help desk interface<br/>
+                        Checked: URL opens in a separate browser tab
+                    </div>
+                </label>
+            }
+            
             <div class="form-row"><label>Display order</label><input class="hd-input" @bind="_order" /></div>
             <label><input type="checkbox" @bind="_active" /> Active</label>
             <div class="hd-modal-actions">
@@ -91,6 +127,8 @@
     private int _appId;
     private string _name = "";
     private string _route = "";
+    private string _url = "";
+    private bool _openInNewTab;
     private int _order;
     private bool _active = true;
     private string? _msg;
@@ -138,6 +176,8 @@
         _appId = _apps.Count > 0 ? _apps[0].Id : 0;
         _name = "";
         _route = "";
+        _url = "";
+        _openInNewTab = false;
         _order = 0;
         _active = true;
     }
@@ -168,7 +208,9 @@
         _editingId = p.Id;
         _appId = p.DeskApplicationId;
         _name = p.Name;
-        _route = p.Route;
+        _route = p.Route ?? "";
+        _url = p.Url ?? "";
+        _openInNewTab = p.OpenInNewTab;
         _order = p.DisplayOrder;
         _active = p.IsActive;
         _modalOpen = true;
@@ -250,6 +292,28 @@
             return;
         }
 
+        // Validate navigation fields
+        var routeUrlErr = PageNavigationValidation.ErrorIfBothRouteAndUrl(_route, _url);
+        if (routeUrlErr is not null)
+        {
+            _msg = routeUrlErr;
+            return;
+        }
+
+        var newTabErr = PageNavigationValidation.ErrorIfNewTabWithoutUrl(_url, _openInNewTab);
+        if (newTabErr is not null)
+        {
+            _msg = newTabErr;
+            return;
+        }
+
+        var urlErr = PageNavigationValidation.ErrorIfInvalidUrl(_url);
+        if (urlErr is not null)
+        {
+            _msg = urlErr;
+            return;
+        }
+
         var routeErr = AdminNameValidation.ErrorIfHasSpaces(_route, "Route");
         if (routeErr is not null)
         {
@@ -271,7 +335,9 @@
             if (_appId == 0) { _msg = "Select an application."; return; }
             p.DeskApplicationId = _appId;
             p.Name = nameNorm;
-            p.Route = _route.Trim();
+            p.Route = string.IsNullOrWhiteSpace(_route) ? null : _route.Trim();
+            p.Url = string.IsNullOrWhiteSpace(_url) ? null : _url.Trim();
+            p.OpenInNewTab = _openInNewTab;
             p.DisplayOrder = _order;
             p.IsActive = _active;
             p.UpdatedAt = DateTime.UtcNow;
@@ -283,7 +349,9 @@
             {
                 DeskApplicationId = _appId,
                 Name = nameNorm,
-                Route = _route.Trim(),
+                Route = string.IsNullOrWhiteSpace(_route) ? null : _route.Trim(),
+                Url = string.IsNullOrWhiteSpace(_url) ? null : _url.Trim(),
+                OpenInNewTab = _openInNewTab,
                 DisplayOrder = _order,
                 IsActive = _active,
                 CreatedAt = DateTime.UtcNow
@@ -303,4 +371,28 @@
 
     private void OnNameInput(ChangeEventArgs e) =>
         _name = AdminNameValidation.RemoveWhitespace(e.Value?.ToString());
+
+    private void OnNavTypeChanged(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+        switch (value)
+        {
+            case "route":
+                _url = "";
+                _openInNewTab = false;
+                if (string.IsNullOrWhiteSpace(_route))
+                    _route = "/";
+                break;
+            case "url":
+                _route = "";
+                if (string.IsNullOrWhiteSpace(_url))
+                    _url = "https://";
+                break;
+            case "none":
+                _route = "";
+                _url = "";
+                _openInNewTab = false;
+                break;
+        }
+    }
 }
