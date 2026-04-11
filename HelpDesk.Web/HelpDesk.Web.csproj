@@ -8,6 +8,7 @@
   <ItemGroup>
     <ProjectReference Include="..\HelpDesk.Models\HelpDesk.Models.csproj" />
     <ProjectReference Include="..\HelpDesk.Logging\HelpDesk.Logging.csproj" />
+    <ProjectReference Include="..\HelpDesk.Books\HelpDesk.Books.csproj" />
   </ItemGroup>
 
   <ItemGroup>

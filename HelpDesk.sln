@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HelpDesk.Web", "HelpDesk.We
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HelpDesk.Logging", "HelpDesk.Logging\HelpDesk.Logging.csproj", "{489D941C-A372-49D1-98EE-8CEDBEBB5634}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HelpDesk.Books", "HelpDesk.Books\HelpDesk.Books.csproj", "{C9E7B8D3-F1A2-4B5C-8E9F-1D7A3B6C4E5F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -55,6 +57,18 @@ Global
 		{489D941C-A372-49D1-98EE-8CEDBEBB5634}.Release|x64.Build.0 = Release|Any CPU
 		{489D941C-A372-49D1-98EE-8CEDBEBB5634}.Release|x86.ActiveCfg = Release|Any CPU
 		{489D941C-A372-49D1-98EE-8CEDBEBB5634}.Release|x86.Build.0 = Release|Any CPU
+		{C9E7B8D3-F1A2-4B5C-8E9F-1D7A3B6C4E5F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C9E7B8D3-F1A2-4B5C-8E9F-1D7A3B6C4E5F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C9E7B8D3-F1A2-4B5C-8E9F-1D7A3B6C4E5F}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{C9E7B8D3-F1A2-4B5C-8E9F-1D7A3B6C4E5F}.Debug|x64.Build.0 = Debug|Any CPU
+		{C9E7B8D3-F1A2-4B5C-8E9F-1D7A3B6C4E5F}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{C9E7B8D3-F1A2-4B5C-8E9F-1D7A3B6C4E5F}.Debug|x86.Build.0 = Debug|Any CPU
+		{C9E7B8D3-F1A2-4B5C-8E9F-1D7A3B6C4E5F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C9E7B8D3-F1A2-4B5C-8E9F-1D7A3B6C4E5F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C9E7B8D3-F1A2-4B5C-8E9F-1D7A3B6C4E5F}.Release|x64.ActiveCfg = Release|Any CPU
+		{C9E7B8D3-F1A2-4B5C-8E9F-1D7A3B6C4E5F}.Release|x64.Build.0 = Release|Any CPU
+		{C9E7B8D3-F1A2-4B5C-8E9F-1D7A3B6C4E5F}.Release|x86.ActiveCfg = Release|Any CPU
+		{C9E7B8D3-F1A2-4B5C-8E9F-1D7A3B6C4E5F}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

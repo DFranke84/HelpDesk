@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Security.Claims;
 using HelpDesk.Models;
 using HelpDesk.Logging;
@@ -7,6 +8,7 @@ using HelpDesk.Web.Data;
 using HelpDesk.Web.Configuration;
 using HelpDesk.Web.Middleware;
 using HelpDesk.Web.Services;
+using HelpDesk.Books.Extensions;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Negotiate;
 using Microsoft.AspNetCore.Components.Authorization;
@@ -49,10 +51,7 @@ builder.Services.AddDbContextFactory<HelpDeskDbContext>((sp, options) =>
 
 var booksCs = builder.Configuration.GetConnectionString("Books")
     ?? throw new InvalidOperationException("Connection string 'Books' is not configured.");
-builder.Services.AddDbContextFactory<BooksDbContext>((sp, options) =>
-{
-    options.UseSqlServer(booksCs);
-}, ServiceLifetime.Scoped);
+builder.Services.AddHelpDeskBooks(booksCs);
 
 builder.Services.AddScoped<AuthenticationStateProvider, ServerAuthenticationStateProvider>();
 
@@ -109,8 +108,10 @@ app.UseAuthorization();
 app.UseAntiforgery();
 
 app.MapControllers();
+app.MapHelpDeskBooks();
 app.MapRazorComponents<HelpDesk.Web.Components.App>()
-    .AddInteractiveServerRenderMode();
+    .AddInteractiveServerRenderMode()
+    .AddAdditionalAssemblies(typeof(HelpDesk.Books.Data.BooksDbContext).Assembly);
 
 await DbInitializer.MigrateAsync(app.Services).ConfigureAwait(false);
 

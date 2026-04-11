@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace HelpDesk.Models.Books;
+namespace HelpDesk.Books.Models;
 
 /// <summary>Book publisher entity from the external Books database.</summary>
 public sealed class Publisher

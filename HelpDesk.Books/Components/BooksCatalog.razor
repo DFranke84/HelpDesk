@@ -1,51 +1,29 @@
-@page "/user/books/catalog"
+@page "/user/books/books"
 
 @attribute [Authorize]
 
 @implements IAsyncDisposable
 
-@using HelpDesk.Models.Books
-@using HelpDesk.Models.Data
-@using HelpDesk.Web.Services
-@using Microsoft.AspNetCore.Components
+@using Microsoft.EntityFrameworkCore
 @using System.Security.Claims
 
 @inject IDbContextFactory<BooksDbContext> DbFactory
-@inject IDbContextFactory<HelpDeskDbContext> HelpDeskDbFactory
-@inject IStatusBarService StatusBar
 @inject IJSRuntime JS
 @inject NavigationManager Nav
-@inject AuthenticationStateProvider AuthState
-@inject IPagePermissionService PagePermissionService
 
-<PageTitle>Books — catalog</PageTitle>
+<PageTitle>Books</PageTitle>
 
 <div class="hd-admin-page">
-    <h1>Books — catalog</h1>
+    <h1>Books</h1>
     <p class="muted">Titles in the <strong>Books</strong> database (<code>dbo.Books</code>).</p>
     <div class="hd-admin-toolbar">
-        @if (_booksPageId.HasValue)
-        {
-            @if (_userPermissions.CanCreate)
-            {
-                <button type="button" class="hd-btn primary" @onclick="OpenAdd" disabled="@(_publishers.Count == 0)">Add</button>
-            }
-            else
-            {
-                <button type="button" class="hd-btn primary hd-permission-disabled" 
-                        disabled title="You don't have permission to create books">Add</button>
-            }
-        }
-        else
-        {
-            <button type="button" class="hd-btn primary" @onclick="OpenAdd" disabled="@(_publishers.Count == 0)">Add</button>
-        }
+        <button type="button" class="hd-btn primary" @onclick="OpenAdd" disabled="@(_publishers.Count == 0)">Add</button>
     </div>
     @if (_publishers.Count == 0)
     {
         <div class="hd-card" style="margin-top:0.75rem;">
             <strong>No publishers.</strong>
-            <div class="muted">Run <code>Docs/Database/Books.sql</code> on your Books database so <code>Publishers</code> and <code>Books</code> exist.</div>
+            <div class="muted">Run database setup scripts so <code>Publishers</code> and <code>Books</code> exist.</div>
         </div>
     }
     else
@@ -106,17 +84,7 @@
                 <textarea class="hd-input" rows="3" @bind="_description"></textarea>
             </div>
             <div class="hd-modal-actions">
-                @{
-                    var canSave = _editingId is null ? _userPermissions.CanCreate : _userPermissions.CanUpdate;
-                    var saveTitle = _editingId is null 
-                        ? (_userPermissions.CanCreate ? "" : "You don't have permission to create books")
-                        : (_userPermissions.CanUpdate ? "" : "You don't have permission to update books");
-                }
-                <button type="button" 
-                        class="hd-btn primary @(canSave ? "" : "hd-permission-disabled")" 
-                        @onclick="SaveAsync" 
-                        disabled="@(!canSave)"
-                        title="@saveTitle">Save</button>
+                <button type="button" class="hd-btn primary" @onclick="SaveAsync">Save</button>
                 @if (_editingId is null)
                 {
                     <button type="button" class="hd-btn" @onclick="ClearFormAsync">Clear</button>
@@ -133,8 +101,6 @@
 
     private DotNetObjectReference<BooksCatalog>? _interop;
     private List<Publisher> _publishers = new();
-    private int? _booksPageId; // PageId for permission checks
-    private PagePermissions _userPermissions = new();
     private int? _editingId;
     private bool _modalOpen;
     private string _isbn13 = "";
@@ -154,29 +120,23 @@
         _publishers = await booksDb.Publishers.AsNoTracking().OrderBy(p => p.Name).ToListAsync();
         if (_publishers.Count > 0)
             _publisherId = _publishers[0].PublisherId;
-
-        // Load the Books page ID for permission checks
-        await using var helpDeskDb = await HelpDeskDbFactory.CreateDbContextAsync();
-        var booksPage = await helpDeskDb.Pages.AsNoTracking()
-            .Where(p => p.Route == "/user/books/catalog")
-            .FirstOrDefaultAsync();
-        _booksPageId = booksPage?.Id;
-            
-        // Load user's CRUD permissions for this page
-        if (_booksPageId.HasValue)
-        {
-            var authState = await AuthState.GetAuthenticationStateAsync();
-            var user = authState.User;
-            if (user.Identity?.IsAuthenticated == true && 
-                int.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
-            {
-                _userPermissions = await PagePermissionService.GetUserPagePermissionsAsync(userId, _booksPageId.Value);
-            }
-        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (firstRender)
+        {
+            // Load the books catalog JavaScript dynamically
+            await JS.InvokeVoidAsync("eval", @"
+                if (!window.booksCatalogLoaded) {
+                    const script = document.createElement('script');
+                    script.src = '/books-assets/js/booksCatalogGrids.js';
+                    script.onload = function() { window.booksCatalogLoaded = true; };
+                    document.head.appendChild(script);
+                }
+            ");
+        }
+        
         if (_publishers.Count == 0)
             return;
         if (!await JS.InvokeAsync<bool>("helpdeskAdmin.needsInit", TableId))
@@ -187,19 +147,9 @@
             await JS.InvokeVoidAsync("helpdeskAdmin.register", InteropKey, _interop);
         }
 
-        var url = _booksPageId.HasValue 
-            ? Nav.ToAbsoluteUri($"/api/grid/books/catalog?pageId={_booksPageId}").ToString()
-            : Nav.ToAbsoluteUri("/api/grid/books/catalog").ToString();
+        var url = Nav.ToAbsoluteUri("/api/grid/books/catalog").ToString();
         
-        // Pass user permissions to JavaScript
-        var permissionsObj = new {
-            canCreate = _userPermissions.CanCreate,
-            canRead = _userPermissions.CanRead,
-            canUpdate = _userPermissions.CanUpdate,
-            canDelete = _userPermissions.CanDelete
-        };
-        
-        await JS.InvokeVoidAsync("helpdeskAdmin.initBooksCatalog", TableId, url, permissionsObj);
+        await JS.InvokeVoidAsync("helpdeskAdmin.initBooksCatalog", TableId, url, new { canCreate = true, canRead = true, canUpdate = true, canDelete = true });
     }
 
     public async ValueTask DisposeAsync()
@@ -230,13 +180,6 @@
 
     private void OpenAdd()
     {
-        // Check if user has create permission
-        if (!_userPermissions.CanCreate)
-        {
-            _msg = "You don't have permission to create books.";
-            return;
-        }
-        
         ResetEmpty();
         _modalOpen = true;
         _msg = null;
@@ -245,14 +188,6 @@
     [JSInvokable]
     public async Task OpenEdit(int id)
     {
-        // Check if user has update permission
-        if (!_userPermissions.CanUpdate)
-        {
-            _msg = "You don't have permission to edit books.";
-            await InvokeAsync(StateHasChanged);
-            return;
-        }
-        
         await using var db = await DbFactory.CreateDbContextAsync();
         var b = await db.Books.AsNoTracking().FirstOrDefaultAsync(x => x.BookId == id);
         if (b is null)
@@ -279,14 +214,6 @@
     [JSInvokable]
     public async Task PromptDelete(int id)
     {
-        // Check if user has delete permission
-        if (!_userPermissions.CanDelete)
-        {
-            _msg = "You don't have permission to delete books.";
-            await InvokeAsync(StateHasChanged);
-            return;
-        }
-        
         _msg = null;
         string? titleToConfirm;
         {
@@ -311,8 +238,7 @@
                 return;
 
             db.Books.Remove(row);
-            if (!await db.TrySaveChangesAsync(JS))
-                return;
+            await db.SaveChangesAsync();
         }
         if (_editingId == id)
         {
@@ -321,7 +247,6 @@
         }
 
         _msg = "Deleted.";
-        StatusBar.SetMessage("Deleted.");
         await JS.InvokeVoidAsync("helpdeskAdmin.reloadTable", TableId);
         await InvokeAsync(StateHasChanged);
     }
@@ -357,19 +282,6 @@
     {
         _msg = null;
         
-        // Check permissions based on whether this is create or update
-        if (_editingId is null && !_userPermissions.CanCreate)
-        {
-            _msg = "You don't have permission to create books.";
-            return;
-        }
-        
-        if (_editingId is not null && !_userPermissions.CanUpdate)
-        {
-            _msg = "You don't have permission to update books.";
-            return;
-        }
-        
         var isbn = NormalizeIsbn13(_isbn13);
         if (isbn.Length != 13)
         {
@@ -404,8 +316,7 @@
             var existingIsbns = await db.Books.AsNoTracking()
                 .Where(x => !editingId.HasValue || x.BookId != editingId.Value)
                 .Select(x => x.Isbn13)
-                .ToListAsync()
-;
+                .ToListAsync();
             if (existingIsbns.Any(s => string.Equals(s.Trim(), isbn, StringComparison.Ordinal)))
             {
                 _msg = "Another book already uses this ISBN-13.";
@@ -453,13 +364,11 @@
                 });
             }
 
-            if (!await db.TrySaveChangesAsync(JS))
-                return;
+            await db.SaveChangesAsync();
         }
         _modalOpen = false;
         ResetEmpty();
         _msg = "Saved.";
-        StatusBar.SetMessage("Saved.");
         await JS.InvokeVoidAsync("helpdeskAdmin.reloadTable", TableId);
     }
 

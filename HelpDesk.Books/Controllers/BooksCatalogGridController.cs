@@ -1,11 +1,9 @@
-using HelpDesk.Models.Data;
-using HelpDesk.Web.Authorization;
-using HelpDesk.Web.Services;
+using HelpDesk.Books.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
-namespace HelpDesk.Web.Controllers;
+namespace HelpDesk.Books.Controllers;
 
 /// <summary>
 /// Serve books catalog grid JSON from the external Books database.
@@ -33,7 +31,6 @@ public sealed class BooksCatalogGridController : ControllerBase
     /// <param name="ct">Cancellation token.</param>
     /// <returns>JSON rows for books.</returns>
     [HttpGet("catalog")]
-    [PageReadAuthorize(PageIdParameter = "pageId")]
     public async Task<IActionResult> Catalog([FromQuery] int? pageId, CancellationToken ct)
     {
         var rows = await _db.Books.AsNoTracking()

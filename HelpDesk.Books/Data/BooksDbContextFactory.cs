@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Configuration;
 
-namespace HelpDesk.Models.Data;
+namespace HelpDesk.Books.Data;
 
 /// <summary>
 /// Design-time factory for Books database migrations and tooling.

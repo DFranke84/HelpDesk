@@ -1,9 +1,9 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace HelpDesk.Models.Migrations.Books
+namespace HelpDesk.Books.Migrations
 {
     /// <inheritdoc />
     public partial class BooksInitial : Migration

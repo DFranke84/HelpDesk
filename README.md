@@ -4,12 +4,13 @@ Internal help desk application built with ASP.NET Core 8 and Blazor Server.
 
 ## Architecture
 
-The solution contains three projects:
+The solution contains four projects:
 
 | Project | Purpose |
 |---------|---------|
 | **HelpDesk.Web** | Blazor Server host — UI, controllers, middleware, services |
 | **HelpDesk.Models** | EF Core domain models, DbContext, migrations |
+| **HelpDesk.Books** | Books catalog library — models, controllers, UI components |
 | **HelpDesk.Logging** | Cross-cutting logging and logger abstractions (NLog) |
 
 ### Key technology
@@ -94,7 +95,7 @@ Migrations are applied automatically at startup via `DbInitializer.MigrateAsync`
 
 ### Books catalog
 
-A secondary `BooksDbContext` connects to a separate `Books` database and demonstrates external database integration. See `Docs/Database/BooksCatalog-Implementation.md`.
+The Books catalog functionality has been moved to a separate `HelpDesk.Books` library project. This includes a secondary `BooksDbContext` that connects to a separate `Books` database, demonstrating external database integration and modular architecture. See the `HelpDesk.Books` project documentation.
 
 ## Authentication
 
@@ -133,10 +134,19 @@ HelpDesk.Web/
 
 HelpDesk.Models/
 ├── Data/                # DbContexts and design-time factory
-├── Books/               # Book catalog entities
 ├── External/            # External database context factory
 ├── Migrations/          # EF Core migrations
 └── *.cs                 # Domain entities (User, DeskApplication, etc.)
+
+HelpDesk.Books/
+├── Models/              # Book and Publisher entities
+├── Data/                # BooksDbContext and design-time factory
+├── Controllers/         # Books catalog API controller
+├── Components/          # BooksCatalog Blazor component
+├── Migrations/          # Books database migrations
+├── Extensions/          # Service registration extensions
+├── wwwroot/js/          # Books-specific JavaScript
+└── Database/            # SQL scripts for Books database setup
 
 HelpDesk.Logging/
 └── *.cs                 # Correlation, logger, event log abstractions

@@ -85,7 +85,7 @@ public static class DbInitializer
         const string booksAppName = "BookCollection";
         const string booksCsName = "Books";
         const string booksPageName = "Books";
-        const string booksRoute = "/user/books/catalog";
+        const string booksRoute = "/user/books/books";
         const string legacyPageName = "Book Users";
         const string legacyRoute = "/user/books/users";
         var testUserLoginId = AdminNameValidation.ToUpperNoSpaces("TESTUser");

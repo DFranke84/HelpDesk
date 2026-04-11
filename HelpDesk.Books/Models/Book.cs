@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace HelpDesk.Models.Books;
+namespace HelpDesk.Books.Models;
 
 /// <summary>Row in Books.dbo.Books (library titles).</summary>
 public sealed class Book
