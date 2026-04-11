@@ -28,5 +28,9 @@
     <ProjectReference Include="..\HelpDesk.Logging\HelpDesk.Logging.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="Scripts\**\*" />
+  </ItemGroup>
+
 </Project>
 
