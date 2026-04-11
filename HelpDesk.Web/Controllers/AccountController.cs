@@ -115,7 +115,7 @@ public class AccountController : ControllerBase
             return Unauthorized(new { error = $"Too many failed attempts. Try again in {minutes} minute(s)." });
         }
 
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.LoginId == loginId && u.IsActive, ct)
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.LoginId == loginId && u.IsActive && u.UserType == UserType.User, ct)
             .ConfigureAwait(false);
         if (user is null)
         {
@@ -187,7 +187,7 @@ public class AccountController : ControllerBase
         if (_rateLimiter.IsBlocked(normalized, out _))
             return Redirect("/login?loginError=locked");
 
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.LoginId == normalized && u.IsActive, ct)
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.LoginId == normalized && u.IsActive && u.UserType == UserType.User, ct)
             .ConfigureAwait(false);
         if (user is null)
         {

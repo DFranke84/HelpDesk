@@ -61,7 +61,7 @@ public class PasswordResetService
     /// <returns>Absolute reset URL, or null when no user matches.</returns>
     public async Task<string?> CreateResetTokenAsync(string email, CancellationToken ct = default)
     {
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == email && u.IsActive, ct).ConfigureAwait(false);
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == email && u.IsActive && u.UserType == UserType.User, ct).ConfigureAwait(false);
         if (user is null)
             return null;
 
@@ -97,7 +97,7 @@ public class PasswordResetService
         if (string.IsNullOrEmpty(normalized))
             return null;
 
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.LoginId == normalized && u.IsActive, ct).ConfigureAwait(false);
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.LoginId == normalized && u.IsActive && u.UserType == UserType.User, ct).ConfigureAwait(false);
         if (user is null || string.IsNullOrWhiteSpace(user.Email))
             return null;
 
@@ -136,7 +136,7 @@ public class PasswordResetService
         var hash = Sha256(rawToken);
         var token = await _db.PasswordResetTokens
             .Include(t => t.User)
-            .FirstOrDefaultAsync(t => t.TokenHash == hash && t.UsedAt == null && t.ExpiresAt > DateTime.UtcNow, ct)
+            .FirstOrDefaultAsync(t => t.TokenHash == hash && t.UsedAt == null && t.ExpiresAt > DateTime.UtcNow && t.User.UserType == UserType.User, ct)
             .ConfigureAwait(false);
 
         if (token is null)

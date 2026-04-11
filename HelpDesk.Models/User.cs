@@ -13,6 +13,9 @@ public sealed class User
     [Column("LoginID")]
     public string LoginId { get; set; } = string.Empty;
 
+    /// <summary>Type of user: individual person or Windows group.</summary>
+    public UserType UserType { get; set; } = UserType.User;
+
     [MaxLength(100)]
     public string? FirstName { get; set; }
 
@@ -20,8 +23,8 @@ public sealed class User
     public string? LastName { get; set; }
 
     [JsonIgnore]
-    [Required, MaxLength(500)]
-    public string PasswordHash { get; set; } = string.Empty;
+    [MaxLength(500)]
+    public string? PasswordHash { get; set; }
 
     [MaxLength(256)]
     public string? Email { get; set; }

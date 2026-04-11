@@ -254,6 +254,7 @@ public sealed class HelpDeskDbContext : DbContext
             e.ToTable("Users");
             e.HasIndex(x => x.LoginId).IsUnique();
             e.Property(x => x.LoginId).HasMaxLength(256);
+            e.Property(x => x.UserType).HasDefaultValue(UserType.User);
             e.Property(x => x.FirstName).HasMaxLength(100);
             e.Property(x => x.LastName).HasMaxLength(100);
             e.Property(x => x.MustChangePassword).HasDefaultValue(false);
@@ -262,6 +263,9 @@ public sealed class HelpDeskDbContext : DbContext
             e.Property(x => x.DomainSamAccountName).HasMaxLength(256);
             e.Property(x => x.DomainUserPrincipalName).HasMaxLength(256);
             e.Property(x => x.RowVersion).IsRowVersion();
+            
+            // Business rule constraints can be added later via separate migrations
+            // after existing data is cleaned up if needed
         });
 
         modelBuilder.Entity<DeskApplication>(e =>

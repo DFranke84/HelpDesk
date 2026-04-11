@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Security.Principal;
 using HelpDesk.Models;
 using HelpDesk.Models.Data;
 using HelpDesk.Logging;
@@ -34,12 +35,14 @@ public sealed class WindowsAutoLoginMiddleware
     /// <param name="db">Help Desk database <see cref="HelpDeskDbContext"/>.</param>
     /// <param name="log">Event log manager <see cref="EventLogManager"/>.</param>
     /// <param name="configuration">Application configuration <see cref="IConfiguration"/>.</param>
+    /// <param name="windowsGroupService">Windows group resolution service <see cref="IWindowsGroupService"/>.</param>
     /// <returns>A task that completes when the pipeline finishes.</returns>
     public async Task InvokeAsync(
         HttpContext context,
         HelpDeskDbContext db,
         EventLogManager log,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IWindowsGroupService windowsGroupService)
     {
         if (context.User.Identity?.AuthenticationType == CookieAuthenticationDefaults.AuthenticationScheme
             && context.User.Identity.IsAuthenticated)
@@ -93,7 +96,49 @@ public sealed class WindowsAutoLoginMiddleware
             return;
         }
 
-        var claims = CookieAuthClaims.BuildForWindowsUser(user);
+        // Resolve user's Windows groups and find matching HelpDesk groups
+        List<Claim> claims;
+        var enableGroupIntegration = configuration.GetValue("App:EnableWindowsGroupIntegration", true);
+        
+        if (enableGroupIntegration && win.Principal?.Identity is System.Security.Principal.WindowsIdentity windowsIdentity)
+        {
+            try
+            {
+                // Get user's Windows groups
+                var windowsGroups = await windowsGroupService.GetUserWindowsGroupsAsync(windowsIdentity);
+                log.LogDebug("Found {Count} Windows groups for user {User}", windowsGroups.Count, winName);
+
+                // Find matching HelpDesk group entities
+                var helpdeskGroupEntities = await windowsGroupService.GetHelpdeskGroupEntitiesAsync(windowsGroups);
+                
+                // Create UserGroupInfo with access levels for claims
+                var userGroups = new List<Models.UserGroupInfo>();
+                foreach (var groupEntity in helpdeskGroupEntities)
+                {
+                    var accessLevel = await windowsGroupService.CalculateGroupAccessLevelAsync(groupEntity.Id);
+                    userGroups.Add(new Models.UserGroupInfo
+                    {
+                        Id = groupEntity.Id,
+                        Name = groupEntity.LoginId,
+                        AccessLevel = accessLevel,
+                        Role = groupEntity.Role
+                    });
+                }
+
+                claims = CookieAuthClaims.BuildForWindowsUser(user, userGroups);
+                log.LogInformation("Assigned {Count} HelpDesk groups to user {User}", userGroups.Count, user.LoginId);
+            }
+            catch (Exception ex)
+            {
+                log.LogWarning("Failed to resolve Windows groups for user {User}: {Error}", winName, ex.Message);
+                claims = CookieAuthClaims.BuildForWindowsUser(user);
+            }
+        }
+        else
+        {
+            claims = CookieAuthClaims.BuildForWindowsUser(user);
+        }
+        
         claims.Add(new Claim(AuthClaims.WindowsName, winName));
 
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme));

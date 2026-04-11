@@ -1,0 +1,289 @@
+@using HelpDesk.Web.Services
+@using HelpDesk.Web.Models
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
+@inject IUserGroupMembershipService GroupMembershipService
+@inject IJSRuntime JS
+@implements IDisposable
+
+<AuthorizeView Context="auth">
+    <Authorized>
+        @if (userGroups != null && userGroups.Count > 1)
+        {
+            <!-- Multiple groups: Show dropdown -->
+            <div class="hd-group-dropdown">
+                <details class="hd-details" @onmouseleave="CloseDropdown" @ref="dropdownRef">
+                    <summary class="hd-group-summary">
+                        <span class="hd-group-name">@GetDisplayName(auth.User)</span>
+                        <span class="hd-group-badge">@userGroups.Count groups</span>
+                        <span class="hd-dropdown-arrow">▼</span>
+                    </summary>
+                    <div class="hd-group-dropdown-panel">
+                        <div class="hd-group-header">Your Groups</div>
+                        @foreach (var group in userGroups.Take(maxDropdownItems))
+                        {
+                            <div class="hd-group-item @(group.Id == primaryGroup?.Id ? "primary" : "")">
+                                <span class="hd-group-item-name">@group.Name</span>
+                                @if (group.Id == primaryGroup?.Id)
+                                {
+                                    <span class="hd-primary-badge">Primary</span>
+                                }
+                                <span class="hd-access-level">@group.AccessLevel pts</span>
+                            </div>
+                        }
+                        @if (userGroups.Count > maxDropdownItems)
+                        {
+                            <div class="hd-group-more">... and @(userGroups.Count - maxDropdownItems) more</div>
+                        }
+                    </div>
+                </details>
+            </div>
+        }
+        else if (userGroups?.Count == 1)
+        {
+            <!-- Single group: Show group name -->
+            <span class="hd-single-group">@userGroups.First().Name</span>
+        }
+        else
+        {
+            <!-- No groups: Show user name -->
+            <span class="hd-user-only">@GetDisplayName(auth.User)</span>
+        }
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    private List<UserGroupInfo>? userGroups;
+    private UserGroupInfo? primaryGroup;
+    private ElementReference dropdownRef;
+    private readonly int maxDropdownItems = 10;
+    private bool _disposed = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadGroupsAsync();
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+    }
+
+    private async Task LoadGroupsAsync()
+    {
+        if (_disposed) return;
+
+        try
+        {
+            // First try to get from claims (fastest)
+            userGroups = GroupMembershipService.GetGroupsFromClaims();
+            
+            // If no groups in claims, try database
+            if (userGroups == null || !userGroups.Any())
+            {
+                if (_disposed) return; // Check before async operation
+                userGroups = await GroupMembershipService.GetCurrentUserGroupsAsync();
+            }
+            
+            // Ensure userGroups is never null
+            userGroups ??= new List<UserGroupInfo>();
+            
+            if (!_disposed) // Only update if not disposed
+            {
+                primaryGroup = userGroups.OrderByDescending(g => g.AccessLevel).FirstOrDefault();
+            }
+        }
+        catch (Exception)
+        {
+            if (!_disposed)
+            {
+                userGroups = new List<UserGroupInfo>();
+                primaryGroup = null;
+            }
+        }
+    }
+
+    private string GetDisplayName(ClaimsPrincipal user)
+    {
+        // Show primary group name if available, otherwise fall back to user name
+        if (primaryGroup != null)
+            return primaryGroup.Name;
+            
+        return user.FindFirst(AuthClaims.WindowsName)?.Value
+            ?? user.FindFirst(ClaimTypes.Name)?.Value
+            ?? "User";
+    }
+
+    private async Task CloseDropdown()
+    {
+        if (_disposed) return;
+
+        try
+        {
+            if (dropdownRef.Id != null && !_disposed)
+            {
+                await Task.Delay(100); // Small delay to allow click events to register first
+                if (!_disposed)
+                {
+                    await JS.InvokeVoidAsync("helpdeskUi.closeDetails", dropdownRef);
+                }
+            }
+        }
+        catch
+        {
+            // Ignore JS errors (component may be disposed during navigation/logout)
+        }
+    }
+}
+
+<style>
+    .hd-group-dropdown {
+        position: relative;
+        display: inline-block;
+    }
+
+    .hd-group-summary {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        cursor: pointer;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        border: 1px solid transparent;
+        transition: all 0.2s;
+    }
+
+    .hd-group-summary:hover {
+        background: rgba(255, 255, 255, 0.1);
+        border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .hd-group-name {
+        font-weight: 500;
+    }
+
+    .hd-group-badge {
+        font-size: 0.75rem;
+        background: rgba(255, 255, 255, 0.2);
+        color: white;
+        padding: 0.125rem 0.375rem;
+        border-radius: 12px;
+        font-weight: 500;
+    }
+
+    .hd-dropdown-arrow {
+        font-size: 0.75rem;
+        transition: transform 0.2s;
+    }
+
+    .hd-details[open] .hd-dropdown-arrow {
+        transform: rotate(180deg);
+    }
+
+    .hd-group-dropdown-panel {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        min-width: 280px;
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        z-index: 1000;
+        margin-top: 0.25rem;
+    }
+
+    .hd-group-header {
+        padding: 0.75rem 1rem 0.5rem;
+        font-weight: 600;
+        color: #333;
+        border-bottom: 1px solid #eee;
+        font-size: 0.875rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .hd-group-item {
+        display: flex;
+        align-items: center;
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid #f5f5f5;
+        transition: background-color 0.2s;
+    }
+
+    .hd-group-item:hover {
+        background: #f8f9fa;
+    }
+
+    .hd-group-item.primary {
+        background: #e8f5e8;
+        border-left: 3px solid #28a745;
+    }
+
+    .hd-group-item-name {
+        flex: 1;
+        font-weight: 500;
+        color: #333;
+    }
+
+    .hd-primary-badge {
+        font-size: 0.7rem;
+        background: #28a745;
+        color: white;
+        padding: 0.125rem 0.375rem;
+        border-radius: 10px;
+        font-weight: 600;
+        margin-right: 0.5rem;
+    }
+
+    .hd-access-level {
+        font-size: 0.75rem;
+        color: #666;
+        font-weight: 500;
+    }
+
+    .hd-group-more {
+        padding: 0.5rem 1rem;
+        font-size: 0.875rem;
+        color: #666;
+        font-style: italic;
+        text-align: center;
+    }
+
+    .hd-single-group, .hd-user-only {
+        color: inherit;
+        font-weight: 500;
+    }
+
+    /* Dark theme support */
+    @@media (prefers-color-scheme: dark) {
+        .hd-group-dropdown-panel {
+            background: #2d3748;
+            border-color: #4a5568;
+        }
+
+        .hd-group-header {
+            color: #e2e8f0;
+            border-color: #4a5568;
+        }
+
+        .hd-group-item {
+            border-color: #4a5568;
+        }
+
+        .hd-group-item:hover {
+            background: #4a5568;
+        }
+
+        .hd-group-item-name {
+            color: #e2e8f0;
+        }
+
+        .hd-access-level, .hd-group-more {
+            color: #a0aec0;
+        }
+    }
+</style>

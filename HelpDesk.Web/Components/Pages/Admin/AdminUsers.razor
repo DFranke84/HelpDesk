@@ -5,17 +5,13 @@
 @implements IAsyncDisposable
 
 @using System.Security.Claims
-
 @using HelpDesk.Models
-
 @using HelpDesk.Web.Validation
-
 @using Microsoft.AspNetCore.Components
 
 @inject IDbContextFactory<HelpDesk.Models.Data.HelpDeskDbContext> DbFactory
-
 @inject PasswordHasher<User> Hasher
-
+@inject IUserValidationService ValidationService
 @inject IStatusBarService StatusBar
 
 @inject IJSRuntime JS
@@ -32,6 +28,7 @@
         <button type="button" class="hd-btn primary" @onclick="OpenAdd">Add</button>
     </div>
     <table id="tbl-admin-users" class="hd-dt cell-border compact stripe" style="width:100%"></table>
+
     @if (!string.IsNullOrEmpty(_msg) && !_modalOpen)
     {
         <p class="muted">@_msg</p>
@@ -48,290 +45,894 @@
                 <p class="hd-modal-banner" role="alert">@_msg</p>
             }
             <h3 class="hd-modal-title">@(_editingUserId is null ? "Add user" : "Edit user")</h3>
+
             <div class="form-row">
-                <label>First name</label>
-                <input class="hd-input" @bind="_firstName" />
-            </div>
-            <div class="form-row">
-                <label>Last name</label>
-                <input class="hd-input" @bind="_lastName" />
-            </div>
-            <div class="form-row">
-                <label>Login ID</label>
-                <input class="hd-input" value="@_loginId" @oninput="OnLoginIdInput" autocomplete="off" />
-            </div>
-            <div class="form-row">
-                <label>Email</label>
-                <input class="hd-input" @bind="_email" />
-            </div>
-            <div class="form-row">
-                <label for="admin-user-password">Password (new users only)</label>
-                <PasswordField Id="admin-user-password" Autocomplete="new-password" @bind-Value="_password" />
-            </div>
-            <div class="form-row">
-                <label>Domain SAM (DOMAIN\user)</label>
-                <input class="hd-input" @bind="_sam" />
-            </div>
-            <div class="form-row">
-                <label>Domain UPN</label>
-                <input class="hd-input" @bind="_upn" />
-            </div>
-            <div class="form-row">
-                <label>Role</label>
-                <select class="hd-input" @bind="_role">
-                    <option value="@UserRole.User">User</option>
-                    <option value="@UserRole.Admin">Admin</option>
+
+                <label>Type</label>
+
+                <select class="hd-input" @bind="_userType" @bind:after="OnUserTypeChanged">
+
+                    <option value="@UserType.User">User</option>
+
+                    <option value="@UserType.Group">Group</option>
+
                 </select>
+
             </div>
+
+            @if (_userType == UserType.User)
+
+            {
+
+                <div class="form-row">
+
+                    <label>First name <span class="hd-required">*</span></label>
+
+                    <input class="hd-input" @bind="_firstName" />
+
+                </div>
+
+                <div class="form-row">
+
+                    <label>Last name <span class="hd-required">*</span></label>
+
+                    <input class="hd-input" @bind="_lastName" />
+
+                </div>
+
+            }
+
+            else
+
+            {
+
+                <div class="form-row">
+
+                    <label>Group name <span class="hd-required">*</span></label>
+
+                    <input class="hd-input" @bind="_groupName" placeholder="Enter group name (will be used for display)" />
+
+                </div>
+
+            }
+
+            <div class="form-row">
+
+                <label>@(_userType == UserType.Group ? "Fully qualified group name (Login ID)" : "Login ID") <span class="hd-required">*</span></label>
+
+                <input class="hd-input" 
+
+                       value="@_loginId" 
+
+                       @oninput="OnLoginIdInput" 
+
+                       autocomplete="off" 
+
+                       placeholder="@(_userType == UserType.Group ? "e.g., DOMAIN\\GroupName or COMPUTER\\LocalGroup" : "")" />
+
+            </div>
+
+            @if (_userType == UserType.User)
+
+            {
+
+                <div class="form-row">
+
+                    <label>Email</label>
+
+                    <input class="hd-input" @bind="_email" />
+
+                </div>
+
+                <div class="form-row">
+
+                    <label for="admin-user-password">Password @(_editingUserId is null ? "(required for new users)" : "(leave blank to keep current)")</label>
+
+                    <PasswordField Id="admin-user-password" Autocomplete="new-password" @bind-Value="_password" />
+
+                </div>
+
+            }
+
+            @if (_userType == UserType.User)
+
+            {
+
+                <div class="form-row">
+
+                    <label>Domain SAM (DOMAIN\user)</label>
+
+                    <input class="hd-input" @bind="_sam" placeholder="For Windows authentication matching" />
+
+                </div>
+
+                <div class="form-row">
+
+                    <label>Domain UPN (user@domain.com)</label>
+
+                    <input class="hd-input" @bind="_upn" placeholder="For Windows authentication matching" />
+
+                </div>
+
+            }
+
+            else
+
+            {
+
+                <div class="form-row">
+
+                    <label>Group SID (optional)</label>
+
+                    <input class="hd-input" @bind="_upn" placeholder="Windows Security Identifier for group matching" />
+
+                </div>
+
+            }
+
+            <div class="form-row">
+
+                <label>Role</label>
+
+                <select class="hd-input" @bind="_role">
+
+                    <option value="@UserRole.User">User</option>
+
+                    <option value="@UserRole.Admin">Admin</option>
+
+                </select>
+
+            </div>
+
             <label><input type="checkbox" @bind="_active" /> Active</label>
+
             <div class="hd-modal-actions">
+
                 <button type="button" class="hd-btn primary" @onclick="SaveAsync">Save</button>
+
                 @if (_editingUserId is null)
+
                 {
+
                     <button type="button" class="hd-btn" @onclick="ClearFormAsync">Clear</button>
+
                 }
+
                 <button type="button" class="hd-btn" @onclick="CloseModalAsync">Cancel</button>
+
             </div>
+
         </div>
+
     </div>
+
 }
+
+
 
 @code {
+
     private const string TableId = "tbl-admin-users";
+
     private const string InteropKey = "users";
 
+
+
     private DotNetObjectReference<AdminUsers>? _interop;
+
     private int? _editingUserId;
+
     private bool _modalOpen;
+
+    private UserType _userType = UserType.User;
+
     private string _firstName = "";
+
     private string _lastName = "";
+
+    private string _groupName = "";
+
     private string _loginId = "";
+
     private string? _email;
+
     private string? _password;
+
     private string? _sam;
+
     private string? _upn;
+
     private UserRole _role;
+
     private bool _active = true;
+
     private string? _msg;
 
+
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
+
     {
+
         if (!firstRender)
+
             return;
+
         if (!await JS.InvokeAsync<bool>("helpdeskAdmin.needsInit", TableId))
+
             return;
+
         _interop = DotNetObjectReference.Create(this);
+
         await JS.InvokeVoidAsync("helpdeskAdmin.register", InteropKey, _interop);
+
         var url = Nav.ToAbsoluteUri("/api/grid/admin/users").ToString();
+
         await JS.InvokeVoidAsync("helpdeskAdmin.initUsers", TableId, url);
+
     }
+
+
 
     public async ValueTask DisposeAsync()
+
     {
+
         try
+
         {
+
             await JS.InvokeVoidAsync("helpdeskAdmin.unregister", InteropKey);
+
             await JS.InvokeVoidAsync("helpdeskAdmin.destroyTable", TableId);
+
         }
+
         catch (Microsoft.JSInterop.JSDisconnectedException) { }
+
         catch (InvalidOperationException) { }
+
         _interop?.Dispose();
+
     }
+
+
 
     private void ResetEmpty()
+
     {
+
         _editingUserId = null;
+
+        _userType = UserType.User;
+
         _firstName = "";
+
         _lastName = "";
+
+        _groupName = "";
+
         _loginId = "";
+
         _email = "";
+
         _password = "";
+
         _sam = "";
+
         _upn = "";
+
         _role = UserRole.User;
+
         _active = true;
+
     }
+
+
+
+    private void OnUserTypeChanged()
+
+    {
+
+        // Clear fields that don't apply to the selected type
+
+        if (_userType == UserType.Group)
+
+        {
+
+            _firstName = "";
+
+            _lastName = "";
+
+            _email = "";
+
+            _password = "";
+
+        }
+
+        else
+
+        {
+
+            _groupName = "";
+
+        }
+
+    }
+
+
 
     private void OpenAdd()
+
     {
+
         ResetEmpty();
+
         _modalOpen = true;
+
         _msg = null;
+
     }
 
+
+
     [JSInvokable]
+
     public async Task OpenEdit(int id)
+
     {
+
         await using var db = await DbFactory.CreateDbContextAsync();
+
         var u = await db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
+
         if (u is null)
+
         {
+
             _msg = "User not found.";
+
             await InvokeAsync(StateHasChanged);
+
             return;
+
         }
+
         _editingUserId = u.Id;
+
+        _userType = u.UserType;
+
         _firstName = u.FirstName ?? "";
+
         _lastName = u.LastName ?? "";
+
+        _groupName = u.UserType == UserType.Group ? (u.FirstName ?? "") : "";
+
         _loginId = u.LoginId;
+
         _email = u.Email;
+
         _password = "";
+
         _sam = u.DomainSamAccountName;
+
         _upn = u.DomainUserPrincipalName;
+
         _role = u.Role;
+
         _active = u.IsActive;
+
         _modalOpen = true;
+
         _msg = null;
+
         await InvokeAsync(StateHasChanged);
+
     }
 
+
+
     [JSInvokable]
+
     public async Task PromptDelete(int id)
+
     {
+
         _msg = null;
+
         var state = await AuthState.GetAuthenticationStateAsync();
+
         var selfId = state.User.FindFirstValue(ClaimTypes.NameIdentifier);
+
         if (int.TryParse(selfId, out var sid) && sid == id)
+
         {
+
             _msg = "You cannot delete your own account.";
+
             await InvokeAsync(StateHasChanged);
+
             return;
+
         }
 
+
+
         await using var db = await DbFactory.CreateDbContextAsync();
+
         var u = await db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
+
         if (u is null)
+
         {
+
             _msg = "Not found.";
+
             await InvokeAsync(StateHasChanged);
+
             return;
+
         }
+
+
 
         if (!await JS.InvokeAsync<bool>("confirm", $"Delete user \"{u.LoginId}\"?"))
+
             return;
+
+
 
         var row = await db.Users.FirstOrDefaultAsync(x => x.Id == id);
+
         if (row is null)
+
             return;
+
+
 
         db.Users.Remove(row);
+
         if (!await db.TrySaveChangesAsync(JS))
+
             return;
+
         if (_editingUserId == id)
+
         {
+
             _modalOpen = false;
+
             ResetEmpty();
+
         }
+
         _msg = "Deleted.";
+
         StatusBar.SetMessage("Deleted.");
+
         await JS.InvokeVoidAsync("helpdeskAdmin.reloadTable", TableId);
+
         await InvokeAsync(StateHasChanged);
+
     }
+
+
 
     private async Task CloseModalAsync()
+
     {
+
         if (!await JS.InvokeAsync<bool>("confirm", "Close the editor? Unsaved changes will be lost."))
+
             return;
+
         _modalOpen = false;
+
         ResetEmpty();
+
     }
+
+
 
     private async Task ClearFormAsync()
+
     {
+
         if (!await JS.InvokeAsync<bool>("confirm", "Clear the form? Unsaved changes will be lost."))
+
             return;
+
         if (_editingUserId is { } uid)
+
         {
+
             await using var db = await DbFactory.CreateDbContextAsync();
+
             var u = await db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == uid);
+
             if (u is not null)
+
                 await OpenEdit(u.Id);
+
             else
+
                 ResetEmpty();
+
         }
+
         else
+
         {
+
             ResetEmpty();
+
         }
+
     }
 
+
+
     private async Task SaveAsync()
+
     {
+
         _msg = null;
+
         var loginId = AdminNameValidation.ToUpperNoSpaces(_loginId);
-        if (string.IsNullOrEmpty(loginId))
+
+
+
+        // Create a temporary user object for validation
+
+        var tempUser = new User
+
         {
-            _msg = "Login ID is required.";
+
+            UserType = _userType,
+
+            LoginId = loginId,
+
+            FirstName = _userType == UserType.User ? _firstName?.Trim() : _groupName?.Trim(),
+
+            LastName = _userType == UserType.User ? _lastName?.Trim() : null,
+
+            Email = _userType == UserType.User ? _email?.Trim() : null,
+
+            Role = _role,
+
+            IsActive = _active
+
+        };
+
+
+
+        // Validate using the validation service
+
+        var validationResult = ValidationService.ValidateUser(tempUser, _editingUserId is null, _password);
+
+        if (!validationResult.IsValid)
+
+        {
+
+            _msg = validationResult.GetErrorMessage();
+
             return;
+
         }
 
-        if (_editingUserId is null && string.IsNullOrWhiteSpace(_password))
-        {
-            _msg = "Password is required for new users.";
-            return;
-        }
 
-        var confirmMsg = _editingUserId is null ? "Create this user?" : "Save changes to this user?";
+
+        var entityType = _userType == UserType.User ? "user" : "group";
+
+        var confirmMsg = _editingUserId is null ? $"Create this {entityType}?" : $"Save changes to this {entityType}?";
+
         if (!await JS.InvokeAsync<bool>("confirm", confirmMsg))
+
             return;
 
-        var fn = string.IsNullOrWhiteSpace(_firstName) ? null : _firstName.Trim();
-        var ln = string.IsNullOrWhiteSpace(_lastName) ? null : _lastName.Trim();
+
+
+        // Use the validated values
+
+        var fn = tempUser.FirstName;
+
+        var ln = tempUser.LastName;
+
+
 
         await using var db = await DbFactory.CreateDbContextAsync();
 
+
+
         if (_editingUserId is { } id)
+
         {
+
             var u = await db.Users.FirstOrDefaultAsync(x => x.Id == id);
+
             if (u is null)
+
             {
+
                 _msg = "Not found.";
+
                 return;
+
             }
+
+
+
+            u.UserType = _userType;
 
             u.FirstName = fn;
+
             u.LastName = ln;
+
             u.LoginId = loginId;
-            u.Email = string.IsNullOrWhiteSpace(_email) ? null : _email.Trim();
+
+            u.Email = _userType == UserType.User ? (string.IsNullOrWhiteSpace(_email) ? null : _email.Trim()) : null;
+
             u.DomainSamAccountName = string.IsNullOrWhiteSpace(_sam) ? null : _sam.Trim();
+
             u.DomainUserPrincipalName = string.IsNullOrWhiteSpace(_upn) ? null : _upn.Trim();
+
             u.Role = _role;
+
             u.IsActive = _active;
+
             u.UpdatedAt = DateTime.UtcNow;
-            if (!string.IsNullOrWhiteSpace(_password))
+
+            if (_userType == UserType.User && !string.IsNullOrWhiteSpace(_password))
+
             {
+
                 u.PasswordHash = Hasher.HashPassword(u, _password);
+
                 u.MustChangePassword = true;
+
             }
+
         }
+
         else
+
         {
+
             var u = new User
+
             {
+
+                UserType = _userType,
+
                 FirstName = fn,
+
                 LastName = ln,
+
                 LoginId = loginId,
-                Email = string.IsNullOrWhiteSpace(_email) ? null : _email.Trim(),
+
+                Email = _userType == UserType.User ? (string.IsNullOrWhiteSpace(_email) ? null : _email.Trim()) : null,
+
                 DomainSamAccountName = string.IsNullOrWhiteSpace(_sam) ? null : _sam.Trim(),
+
                 DomainUserPrincipalName = string.IsNullOrWhiteSpace(_upn) ? null : _upn.Trim(),
+
                 Role = _role,
+
                 IsActive = _active,
-                MustChangePassword = true,
+
+                MustChangePassword = _userType == UserType.User, // Only users need to change passwords
+
                 CreatedAt = DateTime.UtcNow
+
             };
-            u.PasswordHash = Hasher.HashPassword(u, _password!);
+
+            if (_userType == UserType.User)
+
+            {
+
+                u.PasswordHash = Hasher.HashPassword(u, _password!);
+
+            }
+
             db.Users.Add(u);
+
         }
+
+
 
         if (!await db.TrySaveChangesAsync(JS))
+
             return;
+
         _modalOpen = false;
+
         ResetEmpty();
+
         _msg = "Saved.";
+
         StatusBar.SetMessage("Saved.");
+
         await JS.InvokeVoidAsync("helpdeskAdmin.reloadTable", TableId);
+
     }
 
+
+
     private void OnLoginIdInput(ChangeEventArgs e) =>
+
         _loginId = AdminNameValidation.ToUpperNoSpaces(e.Value?.ToString());
+
 }
+
+
+
+<style>
+
+    .hd-required {
+
+        color: #dc3545;
+
+        font-weight: bold;
+
+    }
+
+
+
+    .form-row {
+
+        margin-bottom: 1rem;
+
+    }
+
+
+
+    .form-row label {
+
+        display: block;
+
+        margin-bottom: 0.25rem;
+
+        font-weight: 500;
+
+    }
+
+
+
+    .hd-input {
+
+        width: 100%;
+
+        padding: 0.5rem;
+
+        border: 1px solid #ddd;
+
+        border-radius: 4px;
+
+        font-size: 1rem;
+
+    }
+
+
+
+    .hd-input:focus {
+
+        outline: none;
+
+        border-color: #007bff;
+
+        box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+
+    }
+
+
+
+    .hd-input::placeholder {
+
+        color: #999;
+
+        font-style: italic;
+
+    }
+
+
+
+    .hd-modal-title {
+
+        margin-bottom: 1.5rem;
+
+        color: #333;
+
+        font-size: 1.25rem;
+
+        font-weight: 600;
+
+    }
+
+
+
+    .hd-modal-actions {
+
+        margin-top: 2rem;
+
+        display: flex;
+
+        gap: 0.5rem;
+
+    }
+
+
+
+    .hd-modal-banner {
+
+        background: #f8d7da;
+
+        color: #721c24;
+
+        padding: 0.75rem;
+
+        border-radius: 4px;
+
+        margin-bottom: 1rem;
+
+        border: 1px solid #f5c6cb;
+
+    }
+
+
+
+    /* Dark theme support */
+
+    @@media (prefers-color-scheme: dark) {
+
+        .hd-input {
+
+            background: #2d3748;
+
+            border-color: #4a5568;
+
+            color: #e2e8f0;
+
+        }
+
+
+
+        .hd-input:focus {
+
+            border-color: #63b3ed;
+
+            box-shadow: 0 0 0 2px rgba(99, 179, 237, 0.25);
+
+        }
+
+
+
+        .hd-input::placeholder {
+
+            color: #a0aec0;
+
+        }
+
+
+
+        .hd-modal-title {
+
+            color: #e2e8f0;
+
+        }
+
+
+
+        .hd-modal-banner {
+
+            background: #742a2a;
+
+            color: #fed7d7;
+
+            border-color: #9b2c2c;
+
+        }
+
+    }
+
+</style>
+

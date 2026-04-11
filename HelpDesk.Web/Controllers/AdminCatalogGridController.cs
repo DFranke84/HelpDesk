@@ -167,11 +167,12 @@ public sealed class AdminCatalogGridController : ControllerBase
     public async Task<IActionResult> Users(CancellationToken ct)
     {
         var projected = await _db.Users.AsNoTracking()
-            .OrderBy(u => u.LoginId)
+            .OrderBy(u => u.UserType).ThenBy(u => u.LoginId)
             .Take(5000)
             .Select(u => new
             {
                 u.Id,
+                u.UserType,
                 u.FirstName,
                 u.LastName,
                 u.LoginId,
@@ -185,7 +186,10 @@ public sealed class AdminCatalogGridController : ControllerBase
         var rows = projected.Select(u => new
         {
             u.Id,
-            name = UserDisplayName.Format(u.FirstName, u.LastName, u.LoginId),
+            userType = u.UserType.ToString(),
+            name = u.UserType == UserType.User 
+                ? UserDisplayName.Format(u.FirstName, u.LastName, u.LoginId)
+                : u.FirstName ?? u.LoginId, // For groups, show group name or LoginId
             u.LoginId,
             u.Email,
             role = u.Role.ToString(),

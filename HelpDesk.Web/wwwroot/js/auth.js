@@ -34,6 +34,9 @@ window.helpdeskUi = {
       // focus; fall back to polling if the element isn't ready yet.
       requestAnimationFrame(tryFocus);
     });
+  },
+  closeDetails: function (el) {
+    if (el) el.removeAttribute('open');
   }
 };
 

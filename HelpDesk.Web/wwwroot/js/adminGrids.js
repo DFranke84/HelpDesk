@@ -308,11 +308,27 @@ window.helpdeskAdmin = {
 
   initUsers: function (tableId, apiUrl) {
     this._dtBase(tableId, apiUrl, {
-      order: [[2, 'asc']],
+      order: [[3, 'asc']],
       columns: [
+        {
+          data: 'userType',
+          title: 'Type',
+          render: function (d) {
+            return d === 'Group' 
+              ? '<span class="hd-badge hd-badge-group">Group</span>' 
+              : '<span class="hd-badge hd-badge-user">User</span>';
+          }
+        },
         { data: 'name', title: 'Name' },
         { data: 'loginId', title: 'Login ID' },
-        { data: 'email', title: 'Email', defaultContent: '' },
+        { 
+          data: 'email', 
+          title: 'Email', 
+          defaultContent: '',
+          render: function (d) {
+            return d == null || d === '' ? '—' : d;
+          }
+        },
         { data: 'role', title: 'Role' },
         {
           data: 'isActive',

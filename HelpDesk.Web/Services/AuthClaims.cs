@@ -12,4 +12,10 @@ public static class AuthClaims
 
     /// <summary>For Windows integrated sessions, the raw Windows identity (e.g. DOMAIN\user).</summary>
     public const string WindowsName = "windows_name";
+
+    /// <summary>JSON array of HelpDesk group IDs the user belongs to.</summary>
+    public const string HelpdeskGroups = "helpdesk_groups";
+
+    /// <summary>Primary group name (group with most access) for UI display.</summary>
+    public const string PrimaryGroup = "primary_group";
 }
