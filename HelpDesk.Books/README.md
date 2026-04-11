@@ -15,8 +15,7 @@ A modular library for managing a Books catalog, extracted from the main HelpDesk
 
 The HelpDesk.Books library is designed as a self-contained module that can be easily integrated into ASP.NET Core applications. It follows the same patterns as the main HelpDesk application:
 
-- **Models**: Entity classes with validation attributes
-- **Data**: EF Core DbContext with configuration and design-time factory
+- **Models**: Entity classes, EF Core DbContext with configuration and design-time factory (`Models/Data`), migrations (`Models/Migrations`), and SQL scripts (`Models/Scripts`)
 - **Controllers**: API endpoints for JSON data
 - **Components**: Blazor Server components with JS interop
 - **Extensions**: Service registration helpers
@@ -76,8 +75,8 @@ dotnet ef database update --startup-project ../HelpDesk.Web
 ```
 
 Option B - Use SQL Scripts:
-1. Run `Database/HelpDesk-BooksInitial.sql` to create tables and migration history
-2. Run `Database/SeedBooks50.sql` to populate with sample data (optional)
+1. Run `Models/Scripts/HelpDesk-BooksInitial.sql` to create tables and migration history
+2. Run `Models/Scripts/SeedBooks50.sql` to populate with sample data (optional)
 
 ## Usage
 

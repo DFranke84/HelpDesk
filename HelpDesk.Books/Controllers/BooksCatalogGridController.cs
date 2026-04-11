@@ -1,4 +1,4 @@
-using HelpDesk.Books.Data;
+using HelpDesk.Books.Models.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;

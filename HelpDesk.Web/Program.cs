@@ -111,7 +111,7 @@ app.MapControllers();
 app.MapHelpDeskBooks();
 app.MapRazorComponents<HelpDesk.Web.Components.App>()
     .AddInteractiveServerRenderMode()
-    .AddAdditionalAssemblies(typeof(HelpDesk.Books.Data.BooksDbContext).Assembly);
+    .AddAdditionalAssemblies(typeof(HelpDesk.Books.Models.Data.BooksDbContext).Assembly);
 
 await DbInitializer.MigrateAsync(app.Services).ConfigureAwait(false);
 

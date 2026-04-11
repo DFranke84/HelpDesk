@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace HelpDesk.Books.Migrations
+namespace HelpDesk.Books.Models.Migrations
 {
     /// <inheritdoc />
     public partial class BooksInitial : Migration

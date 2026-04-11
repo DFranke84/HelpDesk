@@ -1,4 +1,4 @@
-using HelpDesk.Books.Data;
+using HelpDesk.Books.Models.Data;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;

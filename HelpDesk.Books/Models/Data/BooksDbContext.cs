@@ -1,7 +1,7 @@
 using HelpDesk.Books.Models;
 using Microsoft.EntityFrameworkCore;
 
-namespace HelpDesk.Books.Data;
+namespace HelpDesk.Books.Models.Data;
 
 /// <summary>
 /// Books library EF Core context for the external Books SQL database.

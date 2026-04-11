@@ -139,14 +139,14 @@ HelpDesk.Models/
 └── *.cs                 # Domain entities (User, DeskApplication, etc.)
 
 HelpDesk.Books/
-├── Models/              # Book and Publisher entities
-├── Data/                # BooksDbContext and design-time factory
+├── Models/              # Book and Publisher entities, BooksDbContext, migrations, SQL scripts
+│   ├── Data/            # BooksDbContext and design-time factory
+│   ├── Migrations/      # Books database migrations
+│   └── Scripts/         # SQL scripts for Books database setup
 ├── Controllers/         # Books catalog API controller
 ├── Components/          # BooksCatalog Blazor component
-├── Migrations/          # Books database migrations
 ├── Extensions/          # Service registration extensions
-├── wwwroot/js/          # Books-specific JavaScript
-└── Database/            # SQL scripts for Books database setup
+└── wwwroot/js/          # Books-specific JavaScript
 
 HelpDesk.Logging/
 └── *.cs                 # Correlation, logger, event log abstractions
