@@ -107,6 +107,17 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+// IIS / IIS Express should terminate TLS; reject any request that still appears as HTTP (misconfiguration or removed redirect).
+app.Use(async (context, next) =>
+{
+    if (!context.Request.IsHttps)
+    {
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        return;
+    }
+
+    await next();
+});
 app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();

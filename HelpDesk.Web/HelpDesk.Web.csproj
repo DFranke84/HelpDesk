@@ -3,6 +3,8 @@
   <PropertyGroup>
     <!-- TargetFramework, Nullable, ImplicitUsings inherited from Directory.Build.props -->
     <UserSecretsId>HelpDesk-Web-8f3c2a1b-4d5e-6f70-8192-abcdef012345</UserSecretsId>
+    <!-- Host under IIS / IIS Express only (in-process); do not use the Project/Kestrel launch profile. -->
+    <AspNetCoreHostingModel>InProcess</AspNetCoreHostingModel>
   </PropertyGroup>
 
   <ItemGroup>
