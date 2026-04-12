@@ -105,38 +105,40 @@ public class AccountController : ControllerBase
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest req, CancellationToken ct)
     {
-        var loginId = AdminNameValidation.ToUpperNoSpaces(req.LoginId);
+        var loginId = AdminNameValidation.NormalizeLoginId(req.LoginId);
         if (string.IsNullOrEmpty(loginId) || string.IsNullOrWhiteSpace(req.Password))
             return BadRequest("Login ID and password required.");
 
-        if (_rateLimiter.IsBlocked(loginId, out var retryAfter))
+        var rateLimitKey = loginId.ToLowerInvariant();
+        if (_rateLimiter.IsBlocked(rateLimitKey, out var retryAfter))
         {
             var minutes = (int)Math.Ceiling(retryAfter.TotalMinutes);
             return Unauthorized(new { error = $"Too many failed attempts. Try again in {minutes} minute(s)." });
         }
 
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.LoginId == loginId && u.IsActive && u.UserType == UserType.User, ct)
+        var user = await _db.Users.FirstOrDefaultAsync(
+                u => u.LoginId.ToLower() == loginId.ToLower() && u.IsActive && u.UserType == UserType.User, ct)
             .ConfigureAwait(false);
         if (user is null)
         {
-            _rateLimiter.RecordFailure(loginId);
+            _rateLimiter.RecordFailure(rateLimitKey);
             return Unauthorized();
         }
 
         if (string.IsNullOrEmpty(user.PasswordHash))
         {
-            _rateLimiter.RecordFailure(loginId);
+            _rateLimiter.RecordFailure(rateLimitKey);
             return Unauthorized();
         }
 
         var verify = _hasher.VerifyHashedPassword(user, user.PasswordHash, req.Password);
         if (verify == PasswordVerificationResult.Failed)
         {
-            _rateLimiter.RecordFailure(loginId);
+            _rateLimiter.RecordFailure(rateLimitKey);
             return Unauthorized();
         }
 
-        _rateLimiter.RecordSuccess(loginId);
+        _rateLimiter.RecordSuccess(rateLimitKey);
 
         var claims = CookieAuthClaims.BuildForFormsUser(user);
 
@@ -151,7 +153,7 @@ public class AccountController : ControllerBase
             }).ConfigureAwait(false);
 
         using (_log.BeginContext(loginId: user.LoginId, activityCategory: "Login"))
-            _log.LogInformation("{ActionType} {Message} {Details}", "Login", "Forms login", loginId);
+            _log.LogInformation("{ActionType} {Message} {Details}", "Login", "Forms login", user.LoginId);
 
         ClearSuppressWindowsAutoLoginCookie();
 
@@ -180,35 +182,37 @@ public class AccountController : ControllerBase
         [FromForm] string? returnUrl,
         CancellationToken ct)
     {
-        var normalized = AdminNameValidation.ToUpperNoSpaces(loginId);
+        var normalized = AdminNameValidation.NormalizeLoginId(loginId);
         if (string.IsNullOrEmpty(normalized) || string.IsNullOrWhiteSpace(password))
             return Redirect("/login?loginError=required");
 
-        if (_rateLimiter.IsBlocked(normalized, out _))
+        var rateLimitKey = normalized.ToLowerInvariant();
+        if (_rateLimiter.IsBlocked(rateLimitKey, out _))
             return Redirect("/login?loginError=locked");
 
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.LoginId == normalized && u.IsActive && u.UserType == UserType.User, ct)
+        var user = await _db.Users.FirstOrDefaultAsync(
+                u => u.LoginId.ToLower() == normalized.ToLower() && u.IsActive && u.UserType == UserType.User, ct)
             .ConfigureAwait(false);
         if (user is null)
         {
-            _rateLimiter.RecordFailure(normalized);
+            _rateLimiter.RecordFailure(rateLimitKey);
             return Redirect("/login?loginError=invalid");
         }
 
         if (string.IsNullOrEmpty(user.PasswordHash))
         {
-            _rateLimiter.RecordFailure(normalized);
+            _rateLimiter.RecordFailure(rateLimitKey);
             return Redirect("/login?loginError=invalid");
         }
 
         var verify = _hasher.VerifyHashedPassword(user, user.PasswordHash, password);
         if (verify == PasswordVerificationResult.Failed)
         {
-            _rateLimiter.RecordFailure(normalized);
+            _rateLimiter.RecordFailure(rateLimitKey);
             return Redirect("/login?loginError=invalid");
         }
 
-        _rateLimiter.RecordSuccess(normalized);
+        _rateLimiter.RecordSuccess(rateLimitKey);
 
         var claims = CookieAuthClaims.BuildForFormsUser(user);
 
@@ -223,7 +227,7 @@ public class AccountController : ControllerBase
             }).ConfigureAwait(false);
 
         using (_log.BeginContext(loginId: user.LoginId, activityCategory: "Login"))
-            _log.LogInformation("{ActionType} {Message} {Details}", "Login", "Forms login", normalized);
+            _log.LogInformation("{ActionType} {Message} {Details}", "Login", "Forms login", user.LoginId);
 
         ClearSuppressWindowsAutoLoginCookie();
 
@@ -404,7 +408,7 @@ public class AccountController : ControllerBase
     [HttpPost("request-password-reset-by-login")]
     public async Task<IActionResult> RequestPasswordResetByLogin([FromBody] RequestPasswordResetByLoginRequest req, CancellationToken ct)
     {
-        var loginId = AdminNameValidation.ToUpperNoSpaces(req.LoginId);
+        var loginId = AdminNameValidation.NormalizeLoginId(req.LoginId);
         if (string.IsNullOrEmpty(loginId))
             return BadRequest();
 
@@ -436,7 +440,7 @@ public class AccountController : ControllerBase
         CancellationToken ct)
     {
         var target = SafeForgotRedirect(redirectAfter);
-        var normalized = AdminNameValidation.ToUpperNoSpaces(loginId);
+        var normalized = AdminNameValidation.NormalizeLoginId(loginId);
         if (string.IsNullOrEmpty(normalized))
         {
             var err = QueryHelpers.AddQueryString(target, "forgot", "1");

@@ -93,11 +93,13 @@ public class PasswordResetService
     /// <returns>Link and email when created; otherwise null.</returns>
     public async Task<(string Link, string Email)?> TryCreateResetTokenByLoginIdAsync(string loginId, CancellationToken ct = default)
     {
-        var normalized = AdminNameValidation.ToUpperNoSpaces(loginId);
+        var normalized = AdminNameValidation.NormalizeLoginId(loginId);
         if (string.IsNullOrEmpty(normalized))
             return null;
 
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.LoginId == normalized && u.IsActive && u.UserType == UserType.User, ct).ConfigureAwait(false);
+        var user = await _db.Users.FirstOrDefaultAsync(
+                u => u.LoginId.ToLower() == normalized.ToLower() && u.IsActive && u.UserType == UserType.User, ct)
+            .ConfigureAwait(false);
         if (user is null || string.IsNullOrWhiteSpace(user.Email))
             return null;
 

@@ -14,7 +14,7 @@
             <div class="hd-group-dropdown">
                 <details class="hd-details" @onmouseleave="CloseDropdown" @ref="dropdownRef">
                     <summary class="hd-group-summary">
-                        <span class="hd-group-name">@GetDisplayName(auth.User)</span>
+                        <span class="hd-group-name">@GetToolbarLoginId(auth.User)</span>
                         <span class="hd-group-badge">@userGroups.Count groups</span>
                         <span class="hd-dropdown-arrow">▼</span>
                     </summary>
@@ -41,13 +41,13 @@
         }
         else if (userGroups?.Count == 1)
         {
-            <!-- Single group: Show group name -->
-            <span class="hd-single-group">@userGroups.First().Name</span>
+            <!-- Single group: show login id in toolbar -->
+            <span class="hd-single-group">@GetToolbarLoginId(auth.User)</span>
         }
         else
         {
-            <!-- No groups: Show user name -->
-            <span class="hd-user-only">@GetDisplayName(auth.User)</span>
+            <!-- No groups: show login id -->
+            <span class="hd-user-only">@GetToolbarLoginId(auth.User)</span>
         }
     </Authorized>
 </AuthorizeView>
@@ -103,16 +103,8 @@
         }
     }
 
-    private string GetDisplayName(ClaimsPrincipal user)
-    {
-        // Show primary group name if available, otherwise fall back to user name
-        if (primaryGroup != null)
-            return primaryGroup.Name;
-            
-        return user.FindFirst(AuthClaims.WindowsName)?.Value
-            ?? user.FindFirst(ClaimTypes.Name)?.Value
-            ?? "User";
-    }
+    private static string GetToolbarLoginId(ClaimsPrincipal user) =>
+        user.FindFirstValue(AuthClaims.LoginId) ?? "User";
 
     private async Task CloseDropdown()
     {

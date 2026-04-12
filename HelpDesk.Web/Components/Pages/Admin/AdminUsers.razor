@@ -578,7 +578,7 @@
 
         _msg = null;
 
-        var loginId = AdminNameValidation.ToUpperNoSpaces(_loginId);
+        var loginId = AdminNameValidation.NormalizeLoginId(_loginId);
 
 
 
@@ -760,7 +760,7 @@
 
     private void OnLoginIdInput(ChangeEventArgs e) =>
 
-        _loginId = AdminNameValidation.ToUpperNoSpaces(e.Value?.ToString());
+        _loginId = AdminNameValidation.NormalizeLoginId(e.Value?.ToString());
 
 }
 

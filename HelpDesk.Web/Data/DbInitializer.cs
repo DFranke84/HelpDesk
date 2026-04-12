@@ -48,7 +48,7 @@ public static class DbInitializer
                 return;
 
             var rawLogin = config["App:InitialAdminLoginId"] ?? config["App:InitialAdminUserName"] ?? "ADMIN";
-            var loginId = AdminNameValidation.ToUpperNoSpaces(rawLogin);
+            var loginId = AdminNameValidation.NormalizeLoginId(rawLogin);
             var password = config["App:InitialAdminPassword"] ?? "ChangeMe!123";
             var email = string.IsNullOrWhiteSpace(config["App:InitialAdminEmail"])
                 ? "admin@localhost"
@@ -88,7 +88,7 @@ public static class DbInitializer
         const string booksRoute = "/user/books/books";
         const string legacyPageName = "Book Users";
         const string legacyRoute = "/user/books/users";
-        var testUserLoginId = AdminNameValidation.ToUpperNoSpaces("TESTUser");
+        var testUserLoginId = AdminNameValidation.NormalizeLoginId("TESTUser");
 
         var group = await db.Groups.AsQueryable()
             .FirstOrDefaultAsync(g => g.Name == booksGroupName, ct)
@@ -233,7 +233,7 @@ public static class DbInitializer
         }
 
         var testUser = await db.Users.AsQueryable()
-            .FirstOrDefaultAsync(u => u.LoginId == testUserLoginId, ct)
+            .FirstOrDefaultAsync(u => u.LoginId.ToLower() == testUserLoginId.ToLower(), ct)
             .ConfigureAwait(false);
         if (testUser is not null)
         {

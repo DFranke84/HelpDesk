@@ -3,7 +3,7 @@ using System.Text;
 namespace HelpDesk.Web.Validation;
 
 /// <summary>
-/// Catalog names: no whitespace (stripped in UI for applications, groups, pages). Login IDs remain uppercase via <see cref="ToUpperNoSpaces"/>.
+/// Catalog names: no whitespace (stripped in UI for applications, groups, pages). Login IDs use <see cref="NormalizeLoginId"/> (no spaces, casing preserved).
 /// </summary>
 public static class AdminNameValidation
 {
@@ -41,6 +41,13 @@ public static class AdminNameValidation
         }
         return sb.ToString();
     }
+
+    /// <summary>
+    /// Strip whitespace from a login id; preserve character casing. Use for forms login, admin user edit, and DB lookups (match with case-insensitive equality).
+    /// </summary>
+    /// <param name="s">Raw input text.</param>
+    /// <returns>String without whitespace characters.</returns>
+    public static string NormalizeLoginId(string? s) => RemoveWhitespace(s);
 
     /// <summary>
     /// Remove all whitespace; preserve character casing (for application, group, and page names).
