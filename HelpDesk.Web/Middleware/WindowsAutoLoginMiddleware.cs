@@ -3,6 +3,7 @@ using System.Security.Principal;
 using HelpDesk.Models;
 using HelpDesk.Models.Data;
 using HelpDesk.Logging;
+using HelpDesk.Web.Models;
 using HelpDesk.Web.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -77,46 +78,81 @@ public sealed class WindowsAutoLoginMiddleware
         var normalized = NormalizeWindowsName(winName);
         var sam = normalized.sam;
         var upn = normalized.upn;
-        var user = await db.Users.AsNoTracking()
-            .Where(u => u.IsActive)
+        // Match person accounts by Domain SAM / UPN (case-insensitive).
+        var samUpper = sam.ToUpperInvariant();
+        var upnUpper = upn?.ToUpperInvariant();
+        var ct = context.RequestAborted;
+
+        User? user = await db.Users.AsNoTracking()
+            .Where(u => u.IsActive && u.UserType == UserType.User)
             .FirstOrDefaultAsync(u =>
                 (u.DomainSamAccountName != null
-                 && u.DomainSamAccountName == sam)
+                 && u.DomainSamAccountName.ToUpper() == samUpper)
                 || (u.DomainUserPrincipalName != null
-                    && upn != null
-                    && u.DomainUserPrincipalName == upn))
+                    && upnUpper != null
+                    && u.DomainUserPrincipalName.ToUpper() == upnUpper), ct)
             .ConfigureAwait(false);
+
+        var enableGroupIntegration = configuration.GetValue("App:EnableWindowsGroupIntegration", true);
+
+        List<WindowsGroupInfo>? cachedWindowsGroups = null;
+        List<User>? cachedHelpdeskGroupEntities = null;
+
+        // No person row: sign in as the HelpDesk group User row(s) already defined (UserType.Group) — use their
+        // User page permissions, catalog UserGroups links, and roles. No new Users row is created.
+        if (user is null && enableGroupIntegration
+            && win.Principal?.Identity is System.Security.Principal.WindowsIdentity wiForGroups)
+        {
+            cachedWindowsGroups = await windowsGroupService.GetUserWindowsGroupsAsync(wiForGroups).ConfigureAwait(false);
+            cachedHelpdeskGroupEntities = await windowsGroupService.GetHelpdeskGroupEntitiesAsync(cachedWindowsGroups)
+                .ConfigureAwait(false);
+            if (cachedHelpdeskGroupEntities.Count > 0)
+            {
+                var ranked = new List<(User Entity, int Access)>();
+                foreach (var ge in cachedHelpdeskGroupEntities)
+                {
+                    var accessLevel = await windowsGroupService.CalculateGroupAccessLevelAsync(ge.Id).ConfigureAwait(false);
+                    ranked.Add((ge, accessLevel));
+                }
+
+                // Role claim comes from the primary row: prefer Admin over User, then highest access level.
+                var primary = ranked
+                    .OrderByDescending(x => x.Entity.Role)
+                    .ThenByDescending(x => x.Access)
+                    .First().Entity;
+                user = primary;
+                log.LogInformation(
+                    "Windows login for {Win} bound to HelpDesk group {GroupLoginId} (no person row); {TotalGroups} group(s) matched.",
+                    winName, primary.LoginId, cachedHelpdeskGroupEntities.Count);
+            }
+        }
 
         if (user is null)
         {
-            // Negotiate succeeded but no matching app user exists — replace the
-            // IIS-provided Windows principal so authorization policies reject the request.
             context.User = new ClaimsPrincipal(new ClaimsIdentity());
-            await _next(context);
+            await _next(context).ConfigureAwait(false);
             return;
         }
 
-        // Resolve user's Windows groups and find matching HelpDesk groups
         List<Claim> claims;
-        var enableGroupIntegration = configuration.GetValue("App:EnableWindowsGroupIntegration", true);
-        
+
         if (enableGroupIntegration && win.Principal?.Identity is System.Security.Principal.WindowsIdentity windowsIdentity)
         {
             try
             {
-                // Get user's Windows groups
-                var windowsGroups = await windowsGroupService.GetUserWindowsGroupsAsync(windowsIdentity);
+                var windowsGroups = cachedWindowsGroups
+                    ?? await windowsGroupService.GetUserWindowsGroupsAsync(windowsIdentity).ConfigureAwait(false);
                 log.LogDebug("Found {Count} Windows groups for user {User}", windowsGroups.Count, winName);
 
-                // Find matching HelpDesk group entities
-                var helpdeskGroupEntities = await windowsGroupService.GetHelpdeskGroupEntitiesAsync(windowsGroups);
-                
-                // Create UserGroupInfo with access levels for claims
-                var userGroups = new List<Models.UserGroupInfo>();
+                var helpdeskGroupEntities = cachedHelpdeskGroupEntities
+                    ?? await windowsGroupService.GetHelpdeskGroupEntitiesAsync(windowsGroups).ConfigureAwait(false);
+
+                var userGroups = new List<UserGroupInfo>();
                 foreach (var groupEntity in helpdeskGroupEntities)
                 {
-                    var accessLevel = await windowsGroupService.CalculateGroupAccessLevelAsync(groupEntity.Id);
-                    userGroups.Add(new Models.UserGroupInfo
+                    var accessLevel = await windowsGroupService.CalculateGroupAccessLevelAsync(groupEntity.Id)
+                        .ConfigureAwait(false);
+                    userGroups.Add(new UserGroupInfo
                     {
                         Id = groupEntity.Id,
                         Name = groupEntity.LoginId,
@@ -126,7 +162,7 @@ public sealed class WindowsAutoLoginMiddleware
                 }
 
                 claims = CookieAuthClaims.BuildForWindowsUser(user, userGroups);
-                log.LogInformation("Assigned {Count} HelpDesk groups to user {User}", userGroups.Count, user.LoginId);
+                log.LogInformation("Assigned {Count} HelpDesk groups to session for {LoginId}", userGroups.Count, user.LoginId);
             }
             catch (Exception ex)
             {
@@ -138,7 +174,7 @@ public sealed class WindowsAutoLoginMiddleware
         {
             claims = CookieAuthClaims.BuildForWindowsUser(user);
         }
-        
+
         claims.Add(new Claim(AuthClaims.WindowsName, winName));
 
         var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme));

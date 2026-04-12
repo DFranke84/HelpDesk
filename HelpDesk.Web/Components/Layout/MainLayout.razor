@@ -24,7 +24,7 @@
                         <details class="hd-details" open="@_accountMenuOpen">
                             <summary class="hd-btn ghost" @onclick="ToggleAccountMenu" @onclick:preventDefault="true">Account</summary>
                             <div class="hd-dropdown-panel">
-                                <a href="/account/change-password" @onclick="GoChangePassword" @onclick:preventDefault="true">Change password</a>
+                                <AccountChangePasswordLink OnBeforeNavigate="CloseAccountMenuAsync" />
                                 <button type="button" class="hd-linkbtn" @onclick="LogoutAsync">Logout</button>
                             </div>
                         </details>
@@ -102,14 +102,14 @@
 
     private void ToggleAccountMenu() => _accountMenuOpen = !_accountMenuOpen;
 
-    [JSInvokable]
-    public void OnIdleLogout() => Nav.NavigateTo(Nav.BaseUri, forceLoad: true);
-
-    private void GoChangePassword()
+    private Task CloseAccountMenuAsync()
     {
         _accountMenuOpen = false;
-        Nav.NavigateTo("/account/change-password");
+        return Task.CompletedTask;
     }
+
+    [JSInvokable]
+    public void OnIdleLogout() => Nav.NavigateTo(Nav.BaseUri, forceLoad: true);
 
     private void GoLogin()
     {

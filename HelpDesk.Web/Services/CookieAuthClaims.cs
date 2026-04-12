@@ -61,7 +61,8 @@ public static class CookieAuthClaims
             new(ClaimTypes.Email, user.Email ?? ""),
             new(ClaimTypes.Role, user.Role.ToString()),
             new(AuthClaims.SessionKind, sessionKind),
-            new(AuthClaims.LoginId, user.LoginId)
+            new(AuthClaims.LoginId, user.LoginId),
+            new(AuthClaims.UserType, user.UserType.ToString())
         };
         if (user.MustChangePassword)
             claims.Add(new Claim(AuthClaims.MustChangePassword, "true"));

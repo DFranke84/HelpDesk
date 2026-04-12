@@ -107,15 +107,18 @@ public class WindowsGroupService : IWindowsGroupService
         if (!windowsGroups.Any()) return new List<User>();
 
         using var db = await _dbFactory.CreateDbContextAsync();
-        
-        var groupNames = windowsGroups.Select(g => g.Name).ToList();
+
+        // Windows NTAccount names are often mixed case; HelpDesk login IDs are stored uppercase.
+        var groupNamesUpper = windowsGroups.Select(g => g.Name.ToUpperInvariant()).ToList();
         var groupSids = windowsGroups.Select(g => g.Sid).ToList();
 
         return await db.Users
             .Where(u => u.UserType == UserType.Group && u.IsActive &&
-                       (groupNames.Contains(u.LoginId) || 
-                        groupNames.Contains(u.DomainSamAccountName) ||
-                        groupSids.Contains(u.DomainUserPrincipalName))) // Store SID in UPN field for groups
+                       (groupNamesUpper.Contains(u.LoginId.ToUpper()) ||
+                        (u.DomainSamAccountName != null &&
+                         groupNamesUpper.Contains(u.DomainSamAccountName.ToUpper())) ||
+                        (u.DomainUserPrincipalName != null &&
+                         groupSids.Contains(u.DomainUserPrincipalName))))
             .ToListAsync();
     }
 

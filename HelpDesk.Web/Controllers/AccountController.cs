@@ -259,6 +259,9 @@ public class AccountController : ControllerBase
         if (user is null)
             return NotFound();
 
+        if (user.UserType != UserType.User)
+            return BadRequest(new { error = "Password change is not available for this sign-in." });
+
         if (string.IsNullOrEmpty(user.PasswordHash))
             return BadRequest(new { error = "Current password is incorrect." });
 

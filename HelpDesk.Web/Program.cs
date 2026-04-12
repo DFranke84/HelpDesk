@@ -9,6 +9,7 @@ using HelpDesk.Web.Configuration;
 using HelpDesk.Web.Middleware;
 using HelpDesk.Web.Services;
 using HelpDesk.Books.Extensions;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Negotiate;
 using Microsoft.AspNetCore.Components.Authorization;
@@ -77,11 +78,16 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddAuthorization(options =>
 {
-    options.FallbackPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
+    options.FallbackPolicy = new AuthorizationPolicyBuilder()
         .RequireAuthenticatedUser()
         .Build();
     options.AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
 });
+
+// FallbackPolicy applies to Blazor's /_framework endpoints; without this, unauthenticated users get
+// an HTML challenge response for blazor.web.js ("Unexpected token '<'" in the browser console).
+builder.Services.AddSingleton<IAuthorizationMiddlewareResultHandler, BlazorInfrastructureAuthorizationMiddlewareResultHandler>();
+
 
 builder.Services.AddSingleton<IExternalDatabaseContextFactory, ExternalDatabaseContextFactory>();
 
