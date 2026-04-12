@@ -138,20 +138,14 @@ public class PagePermissionService : IPagePermissionService
             return result;
         }
 
-        // Get user's traditional group IDs and Windows group IDs
-        var userGroupIds = await db.UserGroups.AsNoTracking()
-            .Where(ug => ug.UserId == userId)
-            .Select(ug => ug.GroupId)
-            .ToListAsync()
+        var windowsGroupUserIds = GetUserHelpdeskGroupIds();
+        var deskGroupIds = await DeskGroupAccessResolver.GetEffectiveDeskGroupIdsAsync(db, userId, windowsGroupUserIds)
             .ConfigureAwait(false);
 
-        var windowsGroupIds = GetUserHelpdeskGroupIds();
-        var allGroupIds = userGroupIds.Union(windowsGroupIds).ToList();
-
-        // Get pages user has access to (via any group)
+        // Get pages user has access to (via any desk group linked to the person or their Windows groups)
         var accessiblePages = await db.Pages.AsNoTracking()
             .Where(p => pageIdList.Contains(p.Id) && p.IsActive)
-            .Where(p => p.DeskApplication.ApplicationGroups.Any(ag => allGroupIds.Contains(ag.DeskGroupId)))
+            .Where(p => p.DeskApplication.ApplicationGroups.Any(ag => deskGroupIds.Contains(ag.DeskGroupId)))
             .Select(p => p.Id)
             .ToListAsync()
             .ConfigureAwait(false);
@@ -164,7 +158,7 @@ public class PagePermissionService : IPagePermissionService
 
         // Get group permissions (both traditional and Windows groups)
         var allEntityIds = new List<int> { userId };
-        allEntityIds.AddRange(windowsGroupIds);
+        allEntityIds.AddRange(windowsGroupUserIds);
 
         var allPermissions = await db.UserPagePermissions.AsNoTracking()
             .Where(upp => allEntityIds.Contains(upp.UserId) && pageIdList.Contains(upp.PageId))
@@ -334,7 +328,7 @@ public class PagePermissionService : IPagePermissionService
     }
 
     /// <summary>
-    /// Get user's HelpDesk group IDs from claims (Windows groups that have been mapped to HelpDesk User entities).
+    /// Windows-mapped HelpDesk <see cref="User"/> ids (<see cref="UserType.Group"/>) from claims — not <see cref="DeskGroup"/> ids.
     /// </summary>
     private List<int> GetUserHelpdeskGroupIds()
     {
@@ -409,22 +403,13 @@ public class PagePermissionService : IPagePermissionService
 
     private async Task<bool> HasGroupAccessToPageAsync(HelpDeskDbContext db, int userId, int pageId)
     {
-        // Get traditional UserGroup relationships
-        var userGroupIds = await db.UserGroups.AsNoTracking()
-            .Where(ug => ug.UserId == userId)
-            .Select(ug => ug.GroupId)
-            .ToListAsync()
+        var windowsGroupUserIds = GetUserHelpdeskGroupIds();
+        var deskGroupIds = await DeskGroupAccessResolver.GetEffectiveDeskGroupIdsAsync(db, userId, windowsGroupUserIds)
             .ConfigureAwait(false);
-
-        // Get Windows group IDs from claims
-        var windowsGroupIds = GetUserHelpdeskGroupIds();
-        
-        // Combine all group IDs
-        var allGroupIds = userGroupIds.Union(windowsGroupIds).ToList();
 
         return await db.Pages.AsNoTracking()
             .Where(p => p.Id == pageId && p.IsActive)
-            .Where(p => p.DeskApplication.ApplicationGroups.Any(ag => allGroupIds.Contains(ag.DeskGroupId)))
+            .Where(p => p.DeskApplication.ApplicationGroups.Any(ag => deskGroupIds.Contains(ag.DeskGroupId)))
             .AnyAsync()
             .ConfigureAwait(false);
     }

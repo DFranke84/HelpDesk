@@ -11,14 +11,17 @@ namespace HelpDesk.Web.Services;
 public class MenuService : IMenuService
 {
     private readonly IDbContextFactory<HelpDeskDbContext> _factory;
+    private readonly IHttpContextAccessor _httpContextAccessor;
 
     /// <summary>
     /// Create menu service with a database factory.
     /// </summary>
     /// <param name="factory">Context factory <see cref="IDbContextFactory{TContext}"/> for <see cref="HelpDeskDbContext"/>.</param>
-    public MenuService(IDbContextFactory<HelpDeskDbContext> factory)
+    /// <param name="httpContextAccessor">Used to read Windows-mapped HelpDesk group ids from claims (must match <see cref="PagePermissionService"/>).</param>
+    public MenuService(IDbContextFactory<HelpDeskDbContext> factory, IHttpContextAccessor httpContextAccessor)
     {
         _factory = factory;
+        _httpContextAccessor = httpContextAccessor;
     }
 
     /// <summary>
@@ -41,11 +44,7 @@ public class MenuService : IMenuService
                 .ConfigureAwait(false);
         }
 
-        var groupIds = await db.UserGroups.AsNoTracking()
-            .Where(ug => ug.UserId == userId)
-            .Select(ug => ug.GroupId)
-            .ToListAsync(ct)
-            .ConfigureAwait(false);
+        var groupIds = await GetEffectiveDeskGroupIdsAsync(db, userId, ct).ConfigureAwait(false);
 
         return await db.Applications.AsNoTracking()
             .Where(a => a.IsActive && a.ApplicationGroups.Any(ag => groupIds.Contains(ag.DeskGroupId)))
@@ -75,11 +74,7 @@ public class MenuService : IMenuService
                 .ConfigureAwait(false);
         }
 
-        var groupIds = await db.UserGroups.AsNoTracking()
-            .Where(ug => ug.UserId == userId)
-            .Select(ug => ug.GroupId)
-            .ToListAsync(ct)
-            .ConfigureAwait(false);
+        var groupIds = await GetEffectiveDeskGroupIdsAsync(db, userId, ct).ConfigureAwait(false);
 
         var canAccessApp = await db.DeskApplicationGroups.AsNoTracking()
             .AnyAsync(ag => ag.DeskApplicationId == appId && groupIds.Contains(ag.DeskGroupId), ct)
@@ -116,11 +111,7 @@ public class MenuService : IMenuService
         }
         else
         {
-            var groupIds = await db.UserGroups.AsNoTracking()
-                .Where(ug => ug.UserId == userId)
-                .Select(ug => ug.GroupId)
-                .ToListAsync(ct)
-                .ConfigureAwait(false);
+            var groupIds = await GetEffectiveDeskGroupIdsAsync(db, userId, ct).ConfigureAwait(false);
 
             var accessibleAppIds = await db.DeskApplicationGroups.AsNoTracking()
                 .Where(ag => ids.Contains(ag.DeskApplicationId) && groupIds.Contains(ag.DeskGroupId))
@@ -195,5 +186,17 @@ public class MenuService : IMenuService
             p = p.TrimEnd('/');
 
         return p;
+    }
+
+    /// <summary>
+    /// Desk catalog group ids: <c>UserGroups</c> for the person plus <c>UserGroups</c> for each Windows-mapped
+    /// group user id in claims (see <see cref="DeskGroupAccessResolver"/>).
+    /// </summary>
+    private async Task<List<int>> GetEffectiveDeskGroupIdsAsync(HelpDeskDbContext db, int userId, CancellationToken ct)
+    {
+        var windowsGroupUserIds = DeskGroupAccessResolver.GetWindowsMappedGroupUserIdsFromClaims(
+            _httpContextAccessor.HttpContext?.User);
+        return await DeskGroupAccessResolver.GetEffectiveDeskGroupIdsAsync(db, userId, windowsGroupUserIds, ct)
+            .ConfigureAwait(false);
     }
 }
