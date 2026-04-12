@@ -40,6 +40,22 @@ public static class CookieAuthClaims
             // Primary group = group with most access
             var primaryGroup = userGroups.OrderByDescending(g => g.AccessLevel).First();
             claims.Add(new Claim(AuthClaims.PrimaryGroup, primaryGroup.Name));
+
+            // Authorization uses ClaimTypes.Role; align with DB logic (highest of user + mapped groups).
+            var effectiveRole = user.Role;
+            foreach (var g in userGroups)
+            {
+                if (g.Role > effectiveRole)
+                    effectiveRole = g.Role;
+            }
+
+            if (effectiveRole != user.Role)
+            {
+                var roleClaim = claims.FirstOrDefault(c => c.Type == ClaimTypes.Role);
+                if (roleClaim != null)
+                    claims.Remove(roleClaim);
+                claims.Add(new Claim(ClaimTypes.Role, effectiveRole.ToString()));
+            }
         }
 
         return claims;
