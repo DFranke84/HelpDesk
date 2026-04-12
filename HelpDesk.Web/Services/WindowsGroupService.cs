@@ -11,6 +11,12 @@ public interface IWindowsGroupService
 {
     /// <summary>Get all Windows groups for the specified user identity.</summary>
     Task<List<WindowsGroupInfo>> GetUserWindowsGroupsAsync(WindowsIdentity identity);
+
+    /// <summary>
+    /// Resolve only Windows token groups that correspond to active <see cref="UserType.Group"/> rows
+    /// (avoids translating and logging every token group).
+    /// </summary>
+    Task<List<WindowsGroupInfo>> GetUserWindowsGroupsMatchingHelpdeskAsync(WindowsIdentity identity);
     
     /// <summary>Get HelpDesk group entities that match the user's Windows groups.</summary>
     Task<List<User>> GetHelpdeskGroupEntitiesAsync(List<WindowsGroupInfo> windowsGroups);
@@ -75,7 +81,7 @@ public class WindowsGroupService : IWindowsGroupService
                     NameResolved = true
                 });
 
-                _logger.LogDebug("Resolved group: {GroupName} (SID: {Sid}, Domain: {IsDomain})", 
+                _logger.LogTrace("Resolved group: {GroupName} (SID: {Sid}, Domain: {IsDomain})", 
                     groupName, groupSid.Value, isDomainGroup);
             }
             catch (Exception ex)
@@ -100,6 +106,159 @@ public class WindowsGroupService : IWindowsGroupService
             groups.Count, identity.Name);
 
         return groups;
+    }
+
+    public async Task<List<WindowsGroupInfo>> GetUserWindowsGroupsMatchingHelpdeskAsync(WindowsIdentity identity)
+    {
+        var groups = new List<WindowsGroupInfo>();
+        var includeLocalGroups = _configuration.GetValue("App:IncludeLocalGroups", true);
+        var includeDomainGroups = _configuration.GetValue("App:IncludeDomainGroups", true);
+
+        if (identity.Groups == null)
+        {
+            _logger.LogWarning("No groups found for Windows identity {Name}", identity.Name);
+            return groups;
+        }
+
+        using var db = await _dbFactory.CreateDbContextAsync();
+        var knownRows = await db.Users.AsNoTracking()
+            .Where(u => u.UserType == UserType.Group && u.IsActive)
+            .Select(u => new { u.LoginId, u.DomainSamAccountName, u.DomainUserPrincipalName })
+            .ToListAsync();
+
+        if (knownRows.Count == 0)
+        {
+            _logger.LogInformation(
+                "Found {Count} HelpDesk-matched Windows groups for user {Name} (no active group rows in database)",
+                0, identity.Name);
+            return groups;
+        }
+
+        var sidToRow = new Dictionary<string, (string LoginId, string? Sam)>(StringComparer.OrdinalIgnoreCase);
+        var nameUpper = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var r in knownRows)
+        {
+            nameUpper.Add(r.LoginId.ToUpperInvariant());
+            if (r.DomainSamAccountName != null)
+                nameUpper.Add(r.DomainSamAccountName.ToUpperInvariant());
+            if (LooksLikeWindowsSid(r.DomainUserPrincipalName))
+            {
+                var key = NormalizeSidKey(r.DomainUserPrincipalName!);
+                if (!sidToRow.ContainsKey(key))
+                    sidToRow[key] = (r.LoginId, r.DomainSamAccountName);
+            }
+        }
+
+        var anyRowNeedsNameResolution = knownRows.Any(r =>
+            string.IsNullOrEmpty(r.DomainUserPrincipalName) || !LooksLikeWindowsSid(r.DomainUserPrincipalName));
+
+        var matchedTokenSids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // Phase 1: token SID matches DomainUserPrincipalName (object SID) — no Translate required.
+        foreach (IdentityReference groupSid in identity.Groups)
+        {
+            var sidVal = groupSid.Value;
+            var key = NormalizeSidKey(sidVal);
+            if (!sidToRow.TryGetValue(key, out var row))
+                continue;
+
+            var displayName = PickNtAccountName(row.LoginId, row.Sam);
+            if (!PassesGroupLocationFilters(displayName, includeDomainGroups, includeLocalGroups))
+                continue;
+
+            groups.Add(new WindowsGroupInfo
+            {
+                Sid = sidVal,
+                Name = displayName,
+                IsDomainGroup = IsDomainGroup(displayName),
+                IsLocalGroup = IsLocalGroup(displayName),
+                NameResolved = true
+            });
+            matchedTokenSids.Add(sidVal);
+            _logger.LogTrace(
+                "HelpDesk-matched group (SID): {GroupName} (SID: {Sid})",
+                displayName, sidVal);
+        }
+
+        // Phase 2: rows without stored SID — Translate token SIDs not already matched and compare names.
+        if (anyRowNeedsNameResolution)
+        {
+            foreach (IdentityReference groupSid in identity.Groups)
+            {
+                if (matchedTokenSids.Contains(groupSid.Value))
+                    continue;
+
+                try
+                {
+                    var account = groupSid.Translate(typeof(NTAccount)) as NTAccount;
+                    if (account?.Value == null)
+                        continue;
+
+                    var groupName = account.Value;
+                    if (!nameUpper.Contains(groupName.ToUpperInvariant()))
+                        continue;
+
+                    if (!PassesGroupLocationFilters(groupName, includeDomainGroups, includeLocalGroups))
+                        continue;
+
+                    groups.Add(new WindowsGroupInfo
+                    {
+                        Sid = groupSid.Value,
+                        Name = groupName,
+                        IsDomainGroup = IsDomainGroup(groupName),
+                        IsLocalGroup = IsLocalGroup(groupName),
+                        NameResolved = true
+                    });
+                    matchedTokenSids.Add(groupSid.Value);
+                    _logger.LogTrace(
+                        "HelpDesk-matched group (name): {GroupName} (SID: {Sid})",
+                        groupName, groupSid.Value);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogTrace(
+                        "Skipped token SID {Sid} during HelpDesk name match: {Error}",
+                        groupSid.Value, ex.Message);
+                }
+            }
+        }
+
+        _logger.LogInformation(
+            "Found {Count} HelpDesk-matched Windows groups for user {Name}",
+            groups.Count, identity.Name);
+
+        return groups;
+    }
+
+    private static bool PassesGroupLocationFilters(string displayName, bool includeDomainGroups, bool includeLocalGroups)
+    {
+        var isDomain = IsDomainGroupStatic(displayName);
+        if (isDomain && !includeDomainGroups)
+            return false;
+        if (!isDomain && !includeLocalGroups)
+            return false;
+        return true;
+    }
+
+    private static string PickNtAccountName(string loginId, string? domainSamAccountName) =>
+        !string.IsNullOrWhiteSpace(domainSamAccountName) ? domainSamAccountName : loginId;
+
+    private static bool LooksLikeWindowsSid(string? s) =>
+        !string.IsNullOrEmpty(s) && s.StartsWith("S-1-", StringComparison.OrdinalIgnoreCase);
+
+    private static string NormalizeSidKey(string sid) => sid.ToUpperInvariant();
+
+    /// <summary>Same rules as <see cref="IsDomainGroup"/> but static for use in early filters.</summary>
+    private static bool IsDomainGroupStatic(string groupName)
+    {
+        if (!groupName.Contains('\\'))
+            return false;
+        var parts = groupName.Split('\\');
+        if (parts.Length != 2)
+            return false;
+        var domain = parts[0];
+        return !string.Equals(domain, Environment.MachineName, StringComparison.OrdinalIgnoreCase) &&
+               !string.Equals(domain, "BUILTIN", StringComparison.OrdinalIgnoreCase);
     }
 
     public async Task<List<User>> GetHelpdeskGroupEntitiesAsync(List<WindowsGroupInfo> windowsGroups)

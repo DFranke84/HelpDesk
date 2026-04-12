@@ -103,7 +103,7 @@ public sealed class WindowsAutoLoginMiddleware
         if (user is null && enableGroupIntegration
             && win.Principal?.Identity is System.Security.Principal.WindowsIdentity wiForGroups)
         {
-            cachedWindowsGroups = await windowsGroupService.GetUserWindowsGroupsAsync(wiForGroups).ConfigureAwait(false);
+            cachedWindowsGroups = await windowsGroupService.GetUserWindowsGroupsMatchingHelpdeskAsync(wiForGroups).ConfigureAwait(false);
             cachedHelpdeskGroupEntities = await windowsGroupService.GetHelpdeskGroupEntitiesAsync(cachedWindowsGroups)
                 .ConfigureAwait(false);
             if (cachedHelpdeskGroupEntities.Count > 0)
@@ -141,8 +141,8 @@ public sealed class WindowsAutoLoginMiddleware
             try
             {
                 var windowsGroups = cachedWindowsGroups
-                    ?? await windowsGroupService.GetUserWindowsGroupsAsync(windowsIdentity).ConfigureAwait(false);
-                log.LogDebug("Found {Count} Windows groups for user {User}", windowsGroups.Count, winName);
+                    ?? await windowsGroupService.GetUserWindowsGroupsMatchingHelpdeskAsync(windowsIdentity).ConfigureAwait(false);
+                log.LogDebug("Found {Count} HelpDesk-matched Windows groups for user {User}", windowsGroups.Count, winName);
 
                 var helpdeskGroupEntities = cachedHelpdeskGroupEntities
                     ?? await windowsGroupService.GetHelpdeskGroupEntitiesAsync(windowsGroups).ConfigureAwait(false);
