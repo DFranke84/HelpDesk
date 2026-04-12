@@ -47,8 +47,18 @@
         }
         else if (userGroups?.Count == 1)
         {
-            <!-- Single group: show login id in toolbar -->
-            <span class="hd-single-group">@GetToolbarLoginId(auth.User)</span>
+            <!-- Single group: same as multi-group — optional Windows FQID + group/login id -->
+            @if (!string.IsNullOrEmpty(GetWindowsFullyQualifiedId(auth.User)))
+            {
+                <div class="hd-group-toolbar">
+                    <span class="hd-windows-fqid" title="Windows identity">@GetWindowsFullyQualifiedId(auth.User)</span>
+                    <span class="hd-single-group">@GetToolbarLoginId(auth.User)</span>
+                </div>
+            }
+            else
+            {
+                <span class="hd-single-group">@GetToolbarLoginId(auth.User)</span>
+            }
         }
         else
         {
@@ -276,6 +286,13 @@
     .hd-single-group, .hd-user-only {
         color: inherit;
         font-weight: 500;
+    }
+
+    .hd-group-toolbar .hd-single-group {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 
     /* Dark theme support */
