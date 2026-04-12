@@ -9,6 +9,7 @@ using HelpDesk.Web.Configuration;
 using HelpDesk.Web.Middleware;
 using HelpDesk.Web.Services;
 using HelpDesk.Books.Extensions;
+using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Negotiate;
@@ -75,6 +76,11 @@ builder.Services.AddAuthentication(options =>
         options.AccessDeniedPath = "/access-denied";
     })
     .AddNegotiate();
+
+builder.Services.Configure<AntiforgeryOptions>(options =>
+{
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+});
 
 builder.Services.AddAuthorization(options =>
 {
