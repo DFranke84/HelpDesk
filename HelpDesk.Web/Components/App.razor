@@ -1,3 +1,5 @@
+@inject IHostEnvironment HostEnvironment
+
 <!DOCTYPE html>
 <html lang="en">
 
@@ -16,7 +18,7 @@
 
 <body>
     @* Static SSR does not run @onclick or IJSRuntime; Interactive Server is required for login and the rest of the UI. *@
-    <Routes @rendermode="InteractiveServer" />
+    <InteractiveRoot />
 
     <div id="blazor-error-ui" data-nosnippet>
         An unhandled error has occurred.
@@ -33,6 +35,11 @@
     <script src="js/diagGrids.js"></script>
     <script src="js/adminGrids.js"></script>
     <script src="js/modalEnhancements.js"></script>
+    @if (HostEnvironment.IsDevelopment())
+    {
+        @* Development only: avoids extra fetch/404s, console hooks, and polling in production. Must run before blazor.web.js. *@
+        <script src="js/blazor-diagnostics.js"></script>
+    }
     <script src="_framework/blazor.web.js"></script>
 </body>
 

@@ -1,0 +1,41 @@
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.Extensions.Hosting
+@inject IHostEnvironment HostEnvironment
+
+<ErrorBoundary>
+    <ChildContent>
+        <Routes @rendermode="InteractiveServer" />
+    </ChildContent>
+    <ErrorContent Context="ex">
+        <div class="hd-blazor-error-boundary" role="alert">
+            <p><strong>A component error occurred.</strong></p>
+            @if (HostEnvironment.IsDevelopment())
+            {
+                <pre class="hd-blazor-error-boundary__detail">@ex.ToString()</pre>
+            }
+            else
+            {
+                <p class="muted">Details were written to the server log.</p>
+            }
+        </div>
+    </ErrorContent>
+</ErrorBoundary>
+
+<style>
+    .hd-blazor-error-boundary {
+        margin: 1rem;
+        padding: 1rem;
+        border: 1px solid var(--hd-danger, #c00);
+        border-radius: 6px;
+        background: var(--hd-danger-bg, #fee);
+    }
+
+    .hd-blazor-error-boundary__detail {
+        margin: 0.75rem 0 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-size: 0.8rem;
+        max-height: 60vh;
+        overflow: auto;
+    }
+</style>

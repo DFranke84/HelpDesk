@@ -5,10 +5,12 @@ namespace HelpDesk.Web.Services;
 
 /// <summary>
 /// Blazor server authentication state backed by the current HTTP user principal.
+/// Caches the principal when HTTP context is available so interactive renders (where context is often null) stay consistent.
 /// </summary>
 public sealed class ServerAuthenticationStateProvider : AuthenticationStateProvider
 {
     private readonly IHttpContextAccessor _http;
+    private ClaimsPrincipal? _cachedUser;
 
     /// <summary>
     /// Create server authentication state provider.
@@ -19,25 +21,48 @@ public sealed class ServerAuthenticationStateProvider : AuthenticationStateProvi
         _http = http;
     }
 
-    /// <summary>
-    /// Get authentication state from the current request user.
-    /// </summary>
-    /// <returns>Task yielding the current <see cref="AuthenticationState"/>.</returns>
+    /// <inheritdoc />
     public override Task<AuthenticationState> GetAuthenticationStateAsync()
     {
-        var user = _http.HttpContext?.User
-                   ?? new ClaimsPrincipal(new ClaimsIdentity());
-        return Task.FromResult(new AuthenticationState(user));
+        var ctx = _http.HttpContext;
+        if (ctx is not null)
+        {
+            var user = ctx.User;
+            if (user.Identity?.IsAuthenticated == true)
+                _cachedUser = user;
+            else
+                _cachedUser = null;
+
+            return Task.FromResult(new AuthenticationState(user));
+        }
+
+        if (_cachedUser is not null)
+            return Task.FromResult(new AuthenticationState(_cachedUser));
+
+        return Task.FromResult(new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity())));
     }
 
     /// <summary>
     /// Notify Blazor that authentication state may have changed.
     /// </summary>
-    /// <returns>This method does not return a value.</returns>
     public void NotifyAuthenticationChanged()
     {
-        var user = _http.HttpContext?.User
-                   ?? new ClaimsPrincipal(new ClaimsIdentity());
-        NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(user)));
+        var ctx = _http.HttpContext;
+        if (ctx is not null)
+        {
+            var user = ctx.User;
+            if (user.Identity?.IsAuthenticated == true)
+                _cachedUser = user;
+            else
+                _cachedUser = null;
+
+            NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(user)));
+            return;
+        }
+
+        if (_cachedUser is not null)
+            NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(_cachedUser)));
+        else
+            NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity()))));
     }
 }

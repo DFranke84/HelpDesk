@@ -14,8 +14,11 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Negotiate;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.Components.Server;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using NLog.Web;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -26,7 +29,13 @@ builder.Logging.ClearProviders();
 builder.Host.UseNLog();
 // Without a console logger, `dotnet run` shows almost no output (NLog writes to file only). Restore console in Development so URLs and errors are visible.
 if (builder.Environment.IsDevelopment())
+{
     builder.Logging.AddConsole();
+    // Blazor/SignalR often log at Information/Debug; default Microsoft.* threshold can hide them.
+    builder.Logging.AddFilter("Microsoft.AspNetCore.Components", LogLevel.Debug);
+    builder.Logging.AddFilter("Microsoft.AspNetCore.Components.Server", LogLevel.Debug);
+    builder.Logging.AddFilter("Microsoft.AspNetCore.SignalR", LogLevel.Debug);
+}
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddMemoryCache();
@@ -58,7 +67,7 @@ var booksCs = builder.Configuration.GetConnectionString("Books")
     ?? throw new InvalidOperationException("Connection string 'Books' is not configured.");
 builder.Services.AddHelpDeskBooks(booksCs);
 
-builder.Services.AddScoped<AuthenticationStateProvider, ServerAuthenticationStateProvider>();
+builder.Services.AddScoped<AuthenticationStateProvider, HelpDesk.Web.Services.ServerAuthenticationStateProvider>();
 
 builder.Services.AddAuthentication(options =>
     {
@@ -99,8 +108,14 @@ builder.Services.AddSingleton<IExternalDatabaseContextFactory, ExternalDatabaseC
 
 builder.Services.AddCascadingAuthenticationState();
 
+builder.Services.AddSingleton<IErrorBoundaryLogger, HelpDeskErrorBoundaryLogger>();
+
 builder.Services.AddRazorComponents()
-    .AddInteractiveServerComponents();
+    .AddInteractiveServerComponents(options =>
+    {
+        options.DetailedErrors = builder.Configuration.GetValue("DetailedErrors", false)
+            || builder.Environment.IsDevelopment();
+    });
 
 builder.Services.AddControllers();
 
