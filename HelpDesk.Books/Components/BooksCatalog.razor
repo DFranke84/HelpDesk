@@ -6,35 +6,64 @@
 
 @using Microsoft.EntityFrameworkCore
 @using System.Security.Claims
+@using Microsoft.AspNetCore.Http
+@using HelpDesk.Books.Models.Data
+@using HelpDesk.Models.Data
+@using HelpDesk.Models
 
 @inject IDbContextFactory<BooksDbContext> DbFactory
+@inject IDbContextFactory<HelpDeskDbContext> HelpDeskDbFactory
 @inject IJSRuntime JS
 @inject NavigationManager Nav
+@inject IHttpContextAccessor HttpContextAccessor
 
 <PageTitle>Books</PageTitle>
 
-<div class="hd-admin-page">
-    <h1>Books</h1>
-    <p class="muted">Titles in the <strong>Books</strong> database (<code>dbo.Books</code>).</p>
-    <div class="hd-admin-toolbar">
-        <button type="button" class="hd-btn primary" @onclick="OpenAdd" disabled="@(_publishers.Count == 0)">Add</button>
+@if (_loading)
+{
+    <div class="hd-admin-page">
+        <h1>Books</h1>
+        <p class="muted">Loading...</p>
     </div>
-    @if (_publishers.Count == 0)
-    {
-        <div class="hd-card" style="margin-top:0.75rem;">
-            <strong>No publishers.</strong>
-            <div class="muted">Run database setup scripts so <code>Publishers</code> and <code>Books</code> exist.</div>
+}
+else if (_accessDenied)
+{
+    <div class="hd-admin-page">
+        <h1>Access Denied</h1>
+        <div class="alert alert-warning">
+            <h4>Read Permission Required</h4>
+            <p>You do not have permission to access the Books catalog. Please contact your administrator for access.</p>
         </div>
-    }
-    else
-    {
-        <table id="tbl-books-catalog" class="hd-dt cell-border compact stripe" style="width:100%"></table>
-    }
-    @if (!string.IsNullOrEmpty(_msg) && !_modalOpen)
-    {
-        <p class="muted">@_msg</p>
-    }
-</div>
+    </div>
+}
+else
+{
+    <div class="hd-admin-page">
+        <h1>Books</h1>
+        <p class="muted">Titles in the <strong>Books</strong> database (<code>dbo.Books</code>).</p>
+        <div class="hd-admin-toolbar">
+            <button type="button" class="hd-btn primary @(!_canCreate ? "hd-permission-disabled" : "")" 
+                    @onclick="OpenAdd" 
+                    disabled="@(_publishers.Count == 0 || !_canCreate)"
+                    title="@(!_canCreate ? "You don't have permission to create books" : "")">Add</button>
+        </div>
+        @if (_publishers.Count == 0)
+        {
+            <div class="hd-card" style="margin-top:0.75rem;">
+                <strong>No publishers.</strong>
+                <div class="muted">Run database setup scripts so <code>Publishers</code> and <code>Books</code> exist.</div>
+            </div>
+        }
+        else
+        {
+            <table id="tbl-books-catalog" class="hd-dt cell-border compact stripe" style="width:100%"></table>
+        }
+        @if (!string.IsNullOrEmpty(_msg) && !_modalOpen)
+        {
+            <p class="muted">@_msg</p>
+        }
+    </div>
+}
 
 @if (_modalOpen)
 {
@@ -99,6 +128,14 @@
     private const string TableId = "tbl-books-catalog";
     private const string InteropKey = "booksCatalog";
 
+    // Permission tracking
+    private bool _canRead = false;
+    private bool _canCreate = false;
+    private bool _canUpdate = false; 
+    private bool _canDelete = false;
+    private bool _loading = true;
+    private bool _accessDenied = false;
+
     private DotNetObjectReference<BooksCatalog>? _interop;
     private List<Publisher> _publishers = new();
     private int? _editingId;
@@ -112,35 +149,181 @@
     private string _languageCode = "en";
     private string? _description;
     private string? _msg;
+    
 
     protected override async Task OnInitializedAsync()
     {
-        // Load Books database publishers
-        await using var booksDb = await DbFactory.CreateDbContextAsync();
-        _publishers = await booksDb.Publishers.AsNoTracking().OrderBy(p => p.Name).ToListAsync();
-        if (_publishers.Count > 0)
-            _publisherId = _publishers[0].PublisherId;
+        try
+        {
+            // Load permissions first
+            await LoadUserPermissionsAsync();
+            // Check if user has read permission
+            if (!_canRead)
+            {
+                _accessDenied = true;
+                _loading = false;
+                return;
+            }
+            
+            // Load Books database publishers only if user has read access
+            await using var booksDb = await DbFactory.CreateDbContextAsync();
+            _publishers = await booksDb.Publishers.AsNoTracking().OrderBy(p => p.Name).ToListAsync();
+            if (_publishers.Count > 0)
+                _publisherId = _publishers[0].PublisherId;
+        }
+        catch (Exception)
+        {
+            _accessDenied = true;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+    
+    private async Task LoadUserPermissionsAsync()
+    {
+        try
+        {
+            var httpContext = HttpContextAccessor.HttpContext;
+            if (httpContext?.User?.Identity?.IsAuthenticated != true)
+            {
+                _canRead = _canCreate = _canUpdate = _canDelete = false;
+                return;
+            }
+
+            // Check if user is admin (full access)
+            if (httpContext.User.IsInRole("Admin"))
+            {
+                _canRead = _canCreate = _canUpdate = _canDelete = true;
+                return;
+            }
+
+            // Get user ID
+            var userIdClaim = httpContext.User.FindFirst(ClaimTypes.NameIdentifier);
+            if (!int.TryParse(userIdClaim?.Value, out var userId))
+            {
+                _canRead = _canCreate = _canUpdate = _canDelete = false;
+                return;
+            }
+
+            // Look up permissions in the database
+            await using var helpDeskDb = await HelpDeskDbFactory.CreateDbContextAsync();
+            
+            // Find the Books page
+            var booksPage = await helpDeskDb.Pages.AsNoTracking()
+                .FirstOrDefaultAsync(p => p.Route == "/user/books/books");
+                
+            if (booksPage == null)
+            {
+                // If page doesn't exist, default to no permissions
+                _canRead = _canCreate = _canUpdate = _canDelete = false;
+                return;
+            }
+
+            // Get user's direct permissions
+            var userPermission = await helpDeskDb.UserPagePermissions.AsNoTracking()
+                .FirstOrDefaultAsync(p => p.UserId == userId && p.PageId == booksPage.Id);
+
+            if (userPermission != null)
+            {
+                _canRead = userPermission.CanRead;
+                _canCreate = userPermission.CanCreate;
+                _canUpdate = userPermission.CanUpdate;
+                _canDelete = userPermission.CanDelete;
+            }
+            else
+            {
+                // Check group permissions through claims (Windows groups mapped to HelpDesk groups)
+                var groupIds = httpContext.User.FindAll("HelpDeskGroupId")
+                    .Select(c => int.TryParse(c.Value, out var id) ? (int?)id : null)
+                    .Where(id => id.HasValue)
+                    .Select(id => id!.Value)
+                    .ToList();
+
+                if (groupIds.Any())
+                {
+                    // Get group permissions
+                    var groupPermissions = await helpDeskDb.UserPagePermissions.AsNoTracking()
+                        .Where(p => groupIds.Contains(p.UserId) && p.PageId == booksPage.Id)
+                        .ToListAsync();
+
+                    // Union all permissions (most permissive wins)
+                    _canRead = groupPermissions.Any(p => p.CanRead);
+                    _canCreate = groupPermissions.Any(p => p.CanCreate);
+                    _canUpdate = groupPermissions.Any(p => p.CanUpdate);
+                    _canDelete = groupPermissions.Any(p => p.CanDelete);
+                }
+                else
+                {
+                    // No permissions found
+                    _canRead = _canCreate = _canUpdate = _canDelete = false;
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // On error, default to no permissions for security
+            _canRead = _canCreate = _canUpdate = _canDelete = false;
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        // Only initialize JavaScript if user has read permission and page isn't loading
+        if (_loading || _accessDenied || !_canRead)
+        {
+            return;
+        }
+            
         if (firstRender)
         {
-            // Load the books catalog JavaScript dynamically
-            await JS.InvokeVoidAsync("eval", @"
-                if (!window.booksCatalogLoaded) {
-                    const script = document.createElement('script');
-                    script.src = '/books-assets/js/booksCatalogGrids.js';
-                    script.onload = function() { window.booksCatalogLoaded = true; };
-                    document.head.appendChild(script);
-                }
-            ");
+            try
+            {
+                // Load the Books JavaScript directly with a simple script injection
+                await JS.InvokeVoidAsync("eval", @"
+                    (function() {
+                        // Remove any existing script first
+                        var existingScript = document.querySelector('script[src=""/books-assets/js/booksCatalogGrids.js""]');
+                        if (existingScript) {
+                            existingScript.remove();
+                        }
+                        
+                        // Add the script
+                        var script = document.createElement('script');
+                        script.src = '/books-assets/js/booksCatalogGrids.js';
+                        script.async = false; // Load synchronously relative to other scripts
+                        document.head.appendChild(script);
+                    })()
+                ");
+                
+                // Give the script time to load
+                await Task.Delay(1000);
+            }
+            catch (Exception)
+            {
+                // Script loading failed, continue without JavaScript enhancement
+            }
         }
         
         if (_publishers.Count == 0)
+        {
             return;
-        if (!await JS.InvokeAsync<bool>("helpdeskAdmin.needsInit", TableId))
+        }
+            
+        // Check dependencies
+        var adminAvailable = await JS.InvokeAsync<bool>("eval", "!!(window.helpdeskAdmin && window.helpdeskAdmin.needsInit)");
+        if (!adminAvailable)
+        {
             return;
+        }
+            
+        var needsInit = await JS.InvokeAsync<bool>("helpdeskAdmin.needsInit", TableId);
+        if (!needsInit)
+        {
+            return;
+        }
+            
         if (_interop is null)
         {
             _interop = DotNetObjectReference.Create(this);
@@ -149,7 +332,59 @@
 
         var url = Nav.ToAbsoluteUri("/api/grid/books/catalog").ToString();
         
-        await JS.InvokeVoidAsync("helpdeskAdmin.initBooksCatalog", TableId, url, new { canCreate = true, canRead = true, canUpdate = true, canDelete = true });
+        // Check if the Books catalog function is available
+        var initFunctionExists = await JS.InvokeAsync<bool>("eval", "!!(window.helpdeskAdmin && window.helpdeskAdmin.initBooksCatalog)");
+        
+        // Try to load the script one more time if the function doesn't exist
+        if (!initFunctionExists)
+        {
+            try 
+            {
+                await JS.InvokeVoidAsync("eval", @"
+                    fetch('/books-assets/js/booksCatalogGrids.js')
+                        .then(response => {
+                            console.log('Script fetch response:', response.status, response.statusText);
+                            return response.text();
+                        })
+                        .then(scriptContent => {
+                            console.log('Script content length:', scriptContent.length);
+                            if (scriptContent.includes('initBooksCatalog')) {
+                                console.log('initBooksCatalog found in script content');
+                                // Execute the script content directly
+                                eval(scriptContent);
+                                console.log('Script executed directly');
+                            } else {
+                                console.log('initBooksCatalog NOT found in script content');
+                            }
+                        })
+                        .catch(err => console.error('Script fetch failed:', err));
+                ");
+                
+                await Task.Delay(500);
+                initFunctionExists = await JS.InvokeAsync<bool>("eval", "!!(window.helpdeskAdmin && window.helpdeskAdmin.initBooksCatalog)");
+            }
+            catch (Exception)
+            {
+                // Script loading failed, continue without enhanced functionality
+            }
+        }
+        
+        if (initFunctionExists)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("helpdeskAdmin.initBooksCatalog", TableId, url, new { 
+                    canCreate = _canCreate, 
+                    canRead = _canRead,
+                    canUpdate = _canUpdate, 
+                    canDelete = _canDelete 
+                });
+            }
+            catch (Exception)
+            {
+                // Grid initialization failed, table will remain as basic HTML
+            }
+        }
     }
 
     public async ValueTask DisposeAsync()
