@@ -67,22 +67,23 @@ public class PagePermissions
     
     /// <summary>
     /// Apply permission hierarchy rules:
-    /// - Create/Update/Delete operations automatically grant Read access
-    /// - Removing Read access removes all other permissions
+    /// - Removing Read access removes all other permissions first
+    /// - Then, Create/Update/Delete operations automatically grant Read access
     /// </summary>
     public void ApplyPermissionHierarchy()
     {
-        // If any CRUD operation is granted, Read must be granted
-        if (CanCreate || CanUpdate || CanDelete)
-            CanRead = true;
-            
-        // If Read is removed, all permissions are removed
+        // FIRST: If Read is removed, all dependent permissions are removed
         if (!CanRead)
         {
             CanCreate = false;
             CanUpdate = false;
             CanDelete = false;
         }
+        
+        // SECOND: If any CRUD operation is granted, Read must be granted
+        // (This handles the case where someone tries to grant Create/Update/Delete without Read)
+        if (CanCreate || CanUpdate || CanDelete)
+            CanRead = true;
     }
 }
 

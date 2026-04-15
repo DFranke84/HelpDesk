@@ -80,22 +80,28 @@
                             <td>
                                 <input type="checkbox" 
                                        checked="@item.Permissions.CanCreate" 
-                                       @onchange="@(e => OnPermissionChanged(item, CrudAction.Create, (bool)e.Value!))" />
+                                       disabled="@(!item.Permissions.CanRead)"
+                                       class="@(item.Permissions.CanRead ? "" : "disabled-permission")"
+                                       @onclick="@(async () => await HandleCreateClick(item))" />
                             </td>
                             <td>
                                 <input type="checkbox" 
                                        checked="@item.Permissions.CanRead" 
-                                       @onchange="@(e => OnPermissionChanged(item, CrudAction.Read, (bool)e.Value!))" />
+                                       @onclick="@(async () => await HandleReadClick(item))" />
                             </td>
                             <td>
                                 <input type="checkbox" 
                                        checked="@item.Permissions.CanUpdate" 
-                                       @onchange="@(e => OnPermissionChanged(item, CrudAction.Update, (bool)e.Value!))" />
+                                       disabled="@(!item.Permissions.CanRead)"
+                                       class="@(item.Permissions.CanRead ? "" : "disabled-permission")"
+                                       @onclick="@(async () => await HandleUpdateClick(item))" />
                             </td>
                             <td>
                                 <input type="checkbox" 
                                        checked="@item.Permissions.CanDelete" 
-                                       @onchange="@(e => OnPermissionChanged(item, CrudAction.Delete, (bool)e.Value!))" />
+                                       disabled="@(!item.Permissions.CanRead)"
+                                       class="@(item.Permissions.CanRead ? "" : "disabled-permission")"
+                                       @onclick="@(async () => await HandleDeleteClick(item))" />
                             </td>
                             <td>
                                 <button type="button" class="hd-btn sm" @onclick="@(() => GrantAllPermissions(item))">
@@ -226,6 +232,9 @@
                 ? permissionLookup[key] 
                 : new PagePermissions(); // Default: no permissions
 
+            // Apply hierarchy rules to ensure consistency even for existing data
+            permissions.ApplyPermissionHierarchy();
+
             _userPageData.Add(new UserPagePermissionItem
             {
                 User = item.User,
@@ -254,11 +263,46 @@
         }
     }
 
+    private async Task HandleCreateClick(UserPagePermissionItem item)
+    {
+        HandlePermissionChange(item, CrudAction.Create, !item.Permissions.CanCreate);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task HandleReadClick(UserPagePermissionItem item)
+    {
+        HandlePermissionChange(item, CrudAction.Read, !item.Permissions.CanRead);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task HandleUpdateClick(UserPagePermissionItem item)
+    {
+        HandlePermissionChange(item, CrudAction.Update, !item.Permissions.CanUpdate);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task HandleDeleteClick(UserPagePermissionItem item)
+    {
+        HandlePermissionChange(item, CrudAction.Delete, !item.Permissions.CanDelete);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void HandlePermissionChange(UserPagePermissionItem item, CrudAction action, bool granted)
+    {
+        // Check if this action is blocked due to disabled state
+        if (!item.Permissions.CanRead && action != CrudAction.Read && granted)
+        {
+            return; // Don't allow enabling Create/Update/Delete without Read
+        }
+        
+        OnPermissionChanged(item, action, granted);
+    }
+
     private void OnPermissionChanged(UserPagePermissionItem item, CrudAction action, bool granted)
     {
         var key = $"{item.User.Id}_{item.Page.Id}";
         
-        // Update the display permissions
+        // Update the specific permission that was changed
         switch (action)
         {
             case CrudAction.Create:
@@ -276,9 +320,12 @@
         }
 
         // Apply permission hierarchy rules
+        // This automatically enforces the business logic:
+        // - If Read is false, Create/Update/Delete are set to false
+        // - If any of Create/Update/Delete is true, Read is set to true
         item.Permissions.ApplyPermissionHierarchy();
 
-        // Track the change
+        // Track the change with the final permissions state after hierarchy rules are applied
         _pendingChanges[key] = new PagePermissions
         {
             CanCreate = item.Permissions.CanCreate,
@@ -292,10 +339,11 @@
 
     private void GrantAllPermissions(UserPagePermissionItem item)
     {
+        // Grant Read first to ensure other permissions can be enabled
+        OnPermissionChanged(item, CrudAction.Read, true);
         OnPermissionChanged(item, CrudAction.Create, true);
         OnPermissionChanged(item, CrudAction.Update, true);
         OnPermissionChanged(item, CrudAction.Delete, true);
-        // Read will be automatically granted by hierarchy rules
     }
 
     private void RemoveAllPermissions(UserPagePermissionItem item)
@@ -308,6 +356,8 @@
     {
         try
         {
+            var changeCount = _pendingChanges.Count;
+            
             foreach (var change in _pendingChanges)
             {
                 var parts = change.Key.Split('_');
@@ -319,14 +369,18 @@
 
             _pendingChanges.Clear();
             _hasChanges = false;
-            _msg = $"Successfully saved permissions for {_pendingChanges.Count} user-page combinations.";
+            _msg = $"Successfully saved permissions for {changeCount} user-page combinations.";
             StatusBar.SetMessage("Permissions saved successfully.");
+            
+            // Reload data to reflect the saved changes
+            await LoadUserPageDataAsync();
         }
         catch (Exception ex)
         {
             _msg = $"Error saving permissions: {ex.Message}";
         }
     }
+
 
     public async ValueTask DisposeAsync()
     {
@@ -367,6 +421,16 @@
 
 .hd-permissions-table input[type="checkbox"] {
     margin: 0;
+}
+
+.hd-permissions-table input[type="checkbox"].disabled-permission {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.hd-permissions-table input[type="checkbox"]:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 .hd-permissions-table .hd-btn {
