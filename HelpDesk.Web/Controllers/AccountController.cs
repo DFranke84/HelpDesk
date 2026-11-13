@@ -412,7 +412,7 @@ public class AccountController : ControllerBase
         var link = await _passwordReset.CreateResetTokenAsync(req.Email.Trim(), ct).ConfigureAwait(false);
         if (link is not null)
         {
-            await _email.SendAsync(req.Email.Trim(), "Help Desk password reset",
+            await TrySendResetEmailAsync(req.Email.Trim(),
                 $"Use this one-time link to set a new password:\r\n{link}", ct).ConfigureAwait(false);
         }
 
@@ -440,10 +440,26 @@ public class AccountController : ControllerBase
         if (created is null)
             return Ok(new { ok = true });
 
-        await _email.SendAsync(created.Value.Email, "Help Desk password reset",
+        await TrySendResetEmailAsync(created.Value.Email,
             "Use this one-time link to set a new password. It expires in 10 minutes:\r\n" + created.Value.Link, ct)
             .ConfigureAwait(false);
         return Ok(new { ok = true });
+    }
+
+    /// <summary>
+    /// Send a reset email without letting a mail failure reach the caller: the response must look the same
+    /// whether or not the account exists, and a mail outage must not become an error page.
+    /// </summary>
+    private async Task TrySendResetEmailAsync(string to, string body, CancellationToken ct)
+    {
+        try
+        {
+            await _email.SendAsync(to, "Help Desk password reset", body, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _log.LogWarning(ex, "Password reset email could not be sent: {Error}", ex.Message);
+        }
     }
 
     /// <summary>
@@ -475,7 +491,7 @@ public class AccountController : ControllerBase
         var created = await _passwordReset.TryCreateResetTokenByLoginIdAsync(normalized, ct).ConfigureAwait(false);
         if (created is not null)
         {
-            await _email.SendAsync(created.Value.Email, "Help Desk password reset",
+            await TrySendResetEmailAsync(created.Value.Email,
                     "Use this one-time link to set a new password. It expires in 10 minutes:\r\n" + created.Value.Link, ct)
                 .ConfigureAwait(false);
         }

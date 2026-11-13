@@ -52,6 +52,20 @@ public sealed class WindowsAutoLoginMiddleware
             return;
         }
 
+        // Under IIS a Windows-authenticated connection arrives with HttpContext.User already set to the Windows
+        // account. Only the Help Desk cookie means "signed in": without it the request is anonymous until the
+        // sign-in below succeeds, otherwise any domain user would pass [Authorize] without a Help Desk account.
+        if (context.User.Identity?.IsAuthenticated == true)
+            context.User = new ClaimsPrincipal(new ClaimsIdentity());
+
+        // Automatic sign-in ends in a redirect back to the same address, which only makes sense for page loads.
+        // A form post (for example the sign-in form itself) must be handled as posted.
+        if (!HttpMethods.IsGet(context.Request.Method) && !HttpMethods.IsHead(context.Request.Method))
+        {
+            await _next(context);
+            return;
+        }
+
         // After an explicit logout the client receives this cookie; skip Negotiate + Windows sign-in until it expires or forms login clears it.
         if (context.Request.Cookies.ContainsKey(AuthCookieNames.SuppressWindowsAutoLogin))
         {

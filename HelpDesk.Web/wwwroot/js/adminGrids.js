@@ -1,3 +1,13 @@
+// Escapes text before it is placed in a grid cell (grid cells are inserted as HTML).
+window.helpdeskEscapeHtml = window.helpdeskEscapeHtml || function (value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+};
+
 window.helpdeskAdmin = {
   handlers: {},
 
@@ -122,7 +132,7 @@ window.helpdeskAdmin = {
           title: 'External key',
           defaultContent: '',
           render: function (d) {
-            return d == null || d === '' ? '—' : d;
+            return d == null || d === '' ? '—' : window.helpdeskEscapeHtml(d);
           }
         },
         {
@@ -218,7 +228,7 @@ window.helpdeskAdmin = {
           title: 'Description',
           defaultContent: '',
           render: function (d) {
-            return d == null || d === '' ? '—' : d;
+            return d == null || d === '' ? '—' : window.helpdeskEscapeHtml(d);
           }
         },
         {
@@ -326,7 +336,7 @@ window.helpdeskAdmin = {
           title: 'Email', 
           defaultContent: '',
           render: function (d) {
-            return d == null || d === '' ? '—' : d;
+            return d == null || d === '' ? '—' : window.helpdeskEscapeHtml(d);
           }
         },
         { data: 'role', title: 'Role' },

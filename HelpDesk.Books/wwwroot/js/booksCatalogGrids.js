@@ -1,3 +1,13 @@
+// Escapes text before it is placed in a grid cell (grid cells are inserted as HTML).
+window.helpdeskEscapeHtml = window.helpdeskEscapeHtml || function (value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+};
+
 /* DataTables grid for Books.dbo.Books — load after adminGrids.js */
 (function () {
   var ha = window.helpdeskAdmin;
@@ -18,7 +28,7 @@
           title: 'Pages',
           defaultContent: '',
           render: function (d) {
-            return d == null ? '—' : d;
+            return d == null ? '—' : window.helpdeskEscapeHtml(d);
           }
         },
         { data: 'lang', title: 'Lang' },

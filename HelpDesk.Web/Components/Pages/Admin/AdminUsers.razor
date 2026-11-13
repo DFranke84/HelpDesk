@@ -490,6 +490,31 @@
 
 
 
+        if (await LastAdminGuard.IsLastActiveAdminAsync(db, id))
+
+
+
+        {
+
+
+
+            _msg = LastAdminGuard.Message;
+
+
+
+            await InvokeAsync(StateHasChanged);
+
+
+
+            return;
+
+
+
+        }
+
+
+
+
         db.Users.Remove(row);
 
         if (!await db.TrySaveChangesAsync(JS))
@@ -642,6 +667,13 @@
 
         await using var db = await DbFactory.CreateDbContextAsync();
 
+        var editingId = _editingUserId ?? 0;
+        if (await db.Users.AnyAsync(x => x.LoginId == loginId && x.Id != editingId))
+        {
+            _msg = "That login ID is already in use.";
+            return;
+        }
+
 
 
         if (_editingUserId is { } id)
@@ -659,6 +691,31 @@
                 return;
 
             }
+
+
+
+            // Never leave the application without an administrator.
+
+
+
+            if ((_role != UserRole.Admin || !_active) && await LastAdminGuard.IsLastActiveAdminAsync(db, id))
+
+
+
+            {
+
+
+
+                _msg = LastAdminGuard.Message;
+
+
+
+                return;
+
+
+
+            }
+
 
 
 

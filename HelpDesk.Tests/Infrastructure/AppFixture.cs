@@ -11,6 +11,7 @@ using HelpDesk.Models;
 using HelpDesk.Models.Data;
 using HelpDesk.Web.Services;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Authentication.Negotiate;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -48,8 +49,13 @@ public sealed class FakeEmailSender : IEmailSender
 
     public ConcurrentQueue<Mail> Sent { get; } = new();
 
+    /// <summary>Addresses for which sending fails, as if the mail server were down.</summary>
+    public ConcurrentDictionary<string, bool> FailFor { get; } = new(StringComparer.OrdinalIgnoreCase);
+
     public Task SendAsync(string to, string subject, string body, CancellationToken ct = default)
     {
+        if (FailFor.ContainsKey(to))
+            throw new System.Net.Sockets.SocketException(10061);
         Sent.Enqueue(new Mail(to, subject, body));
         return Task.CompletedTask;
     }
@@ -104,6 +110,28 @@ public sealed class FakeNegotiateHandler : AuthenticationHandler<AuthenticationS
     }
 }
 
+/// <summary>
+/// Mimics IIS in-process hosting with Windows authentication: the request arrives with
+/// <c>HttpContext.User</c> already set to the Windows account, before any Help Desk sign-in.
+/// The header <c>X-Test-Iis-User</c> (a Windows account name) switches it on for one request.
+/// </summary>
+public sealed class IisWindowsUserStartupFilter : IStartupFilter
+{
+    public const string Header = "X-Test-Iis-User";
+
+    public Action<Microsoft.AspNetCore.Builder.IApplicationBuilder> Configure(Action<Microsoft.AspNetCore.Builder.IApplicationBuilder> next) => app =>
+    {
+        app.Use(async (context, nextMiddleware) =>
+        {
+            var name = context.Request.Headers[Header].ToString();
+            if (!string.IsNullOrEmpty(name))
+                context.User = new ClaimsPrincipal(new GenericIdentity(name, "Negotiate"));
+            await nextMiddleware();
+        });
+        next(app);
+    };
+}
+
 public sealed class HelpDeskFactory : WebApplicationFactory<HelpDesk.Web.Controllers.AccountController>
 {
     private readonly FakeEmailSender _email;
@@ -118,6 +146,7 @@ public sealed class HelpDeskFactory : WebApplicationFactory<HelpDesk.Web.Control
             services.RemoveAll<IEmailSender>();
             services.AddSingleton<IEmailSender>(_email);
 
+            services.AddTransient<IStartupFilter, IisWindowsUserStartupFilter>();
             services.AddTransient<FakeNegotiateHandler>();
             services.Configure<AuthenticationOptions>(o =>
             {

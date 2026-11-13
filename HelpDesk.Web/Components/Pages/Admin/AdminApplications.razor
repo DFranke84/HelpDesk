@@ -256,6 +256,13 @@
 
         await using var db = await DbFactory.CreateDbContextAsync();
 
+        var editingAppId = _editingId ?? 0;
+        if (await db.Applications.AnyAsync(x => x.Name == nameNorm && x.Id != editingAppId))
+        {
+            _msg = "An application with that name already exists.";
+            return;
+        }
+
         if (_editingId is { } eid)
         {
             var a = await db.Applications.FirstOrDefaultAsync(x => x.Id == eid);
