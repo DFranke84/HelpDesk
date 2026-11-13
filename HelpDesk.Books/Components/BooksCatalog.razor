@@ -5,17 +5,14 @@
 @implements IAsyncDisposable
 
 @using Microsoft.EntityFrameworkCore
-@using System.Security.Claims
-@using Microsoft.AspNetCore.Http
 @using HelpDesk.Books.Models.Data
-@using HelpDesk.Models.Data
-@using HelpDesk.Models
+@using HelpDesk.Books.Services
 
 @inject IDbContextFactory<BooksDbContext> DbFactory
-@inject IDbContextFactory<HelpDeskDbContext> HelpDeskDbFactory
+@inject IBooksAccess Access
+@inject AuthenticationStateProvider AuthProvider
 @inject IJSRuntime JS
 @inject NavigationManager Nav
-@inject IHttpContextAccessor HttpContextAccessor
 
 <PageTitle>Books</PageTitle>
 
@@ -181,91 +178,39 @@ else
         }
     }
     
+    /// <summary>
+    /// Re-read the user's Books permissions from the central rules. Called on page load and again
+    /// before every change, because the grid buttons can be bypassed by calling the server methods directly.
+    /// </summary>
     private async Task LoadUserPermissionsAsync()
     {
         try
         {
-            var httpContext = HttpContextAccessor.HttpContext;
-            if (httpContext?.User?.Identity?.IsAuthenticated != true)
-            {
-                _canRead = _canCreate = _canUpdate = _canDelete = false;
-                return;
-            }
-
-            // Check if user is admin (full access)
-            if (httpContext.User.IsInRole("Admin"))
-            {
-                _canRead = _canCreate = _canUpdate = _canDelete = true;
-                return;
-            }
-
-            // Get user ID
-            var userIdClaim = httpContext.User.FindFirst(ClaimTypes.NameIdentifier);
-            if (!int.TryParse(userIdClaim?.Value, out var userId))
-            {
-                _canRead = _canCreate = _canUpdate = _canDelete = false;
-                return;
-            }
-
-            // Look up permissions in the database
-            await using var helpDeskDb = await HelpDeskDbFactory.CreateDbContextAsync();
-            
-            // Find the Books page
-            var booksPage = await helpDeskDb.Pages.AsNoTracking()
-                .FirstOrDefaultAsync(p => p.Route == "/user/books/books");
-                
-            if (booksPage == null)
-            {
-                // If page doesn't exist, default to no permissions
-                _canRead = _canCreate = _canUpdate = _canDelete = false;
-                return;
-            }
-
-            // Get user's direct permissions
-            var userPermission = await helpDeskDb.UserPagePermissions.AsNoTracking()
-                .FirstOrDefaultAsync(p => p.UserId == userId && p.PageId == booksPage.Id);
-
-            if (userPermission != null)
-            {
-                _canRead = userPermission.CanRead;
-                _canCreate = userPermission.CanCreate;
-                _canUpdate = userPermission.CanUpdate;
-                _canDelete = userPermission.CanDelete;
-            }
-            else
-            {
-                // Check group permissions through claims (Windows groups mapped to HelpDesk groups)
-                var groupIds = httpContext.User.FindAll("HelpDeskGroupId")
-                    .Select(c => int.TryParse(c.Value, out var id) ? (int?)id : null)
-                    .Where(id => id.HasValue)
-                    .Select(id => id!.Value)
-                    .ToList();
-
-                if (groupIds.Any())
-                {
-                    // Get group permissions
-                    var groupPermissions = await helpDeskDb.UserPagePermissions.AsNoTracking()
-                        .Where(p => groupIds.Contains(p.UserId) && p.PageId == booksPage.Id)
-                        .ToListAsync();
-
-                    // Union all permissions (most permissive wins)
-                    _canRead = groupPermissions.Any(p => p.CanRead);
-                    _canCreate = groupPermissions.Any(p => p.CanCreate);
-                    _canUpdate = groupPermissions.Any(p => p.CanUpdate);
-                    _canDelete = groupPermissions.Any(p => p.CanDelete);
-                }
-                else
-                {
-                    // No permissions found
-                    _canRead = _canCreate = _canUpdate = _canDelete = false;
-                }
-            }
+            var state = await AuthProvider.GetAuthenticationStateAsync();
+            var p = await Access.GetPermissionsAsync(state.User);
+            _canRead = p.CanRead;
+            _canCreate = p.CanCreate;
+            _canUpdate = p.CanUpdate;
+            _canDelete = p.CanDelete;
         }
         catch (Exception)
         {
             // On error, default to no permissions for security
             _canRead = _canCreate = _canUpdate = _canDelete = false;
         }
+    }
+
+    /// <summary>True when the user may perform the action right now; otherwise shows a message and returns false.</summary>
+    private async Task<bool> EnsureAllowedAsync(Func<bool> allowed, string action)
+    {
+        await LoadUserPermissionsAsync();
+        if (_canRead && allowed())
+            return true;
+
+        _modalOpen = false;
+        _msg = $"You don't have permission to {action} books.";
+        await InvokeAsync(StateHasChanged);
+        return false;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -413,8 +358,11 @@ else
         _description = "";
     }
 
-    private void OpenAdd()
+    private async Task OpenAdd()
     {
+        if (!await EnsureAllowedAsync(() => _canCreate, "create"))
+            return;
+
         ResetEmpty();
         _modalOpen = true;
         _msg = null;
@@ -423,7 +371,10 @@ else
     [JSInvokable]
     public async Task OpenEdit(int id)
     {
-        await using var db = await DbFactory.CreateDbContextAsync();
+        if (!await EnsureAllowedAsync(() => _canUpdate, "edit"))
+            return;
+
+        await using var db= await DbFactory.CreateDbContextAsync();
         var b = await db.Books.AsNoTracking().FirstOrDefaultAsync(x => x.BookId == id);
         if (b is null)
         {
@@ -449,6 +400,9 @@ else
     [JSInvokable]
     public async Task PromptDelete(int id)
     {
+        if (!await EnsureAllowedAsync(() => _canDelete, "delete"))
+            return;
+
         _msg = null;
         string? titleToConfirm;
         {
@@ -464,6 +418,10 @@ else
         }
 
         if (!await JS.InvokeAsync<bool>("confirm", $"Delete \"{titleToConfirm}\"?"))
+            return;
+
+        // Permission may have been removed while the prompt was open.
+        if (!await EnsureAllowedAsync(() => _canDelete, "delete"))
             return;
 
         {
@@ -561,6 +519,11 @@ else
 
         var confirmMsg = _editingId is null ? "Create this book?" : "Save changes?";
         if (!await JS.InvokeAsync<bool>("confirm", confirmMsg))
+            return;
+
+        // Checked on the server immediately before writing: hiding buttons in the browser is not protection.
+        var creating = _editingId is null;
+        if (!await EnsureAllowedAsync(() => creating ? _canCreate : _canUpdate, creating ? "create" : "edit"))
             return;
 
         {

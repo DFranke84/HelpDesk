@@ -44,6 +44,8 @@ builder.Services.AddScoped<ICorrelationContext, CorrelationContext>();
 builder.Services.AddScoped<EventLogManager>();
 builder.Services.AddScoped<IMenuService, MenuService>();
 builder.Services.AddScoped<IPagePermissionService, PagePermissionService>();
+builder.Services.AddScoped<HelpDesk.Books.Services.IBooksAccess, BooksAccess>();
+builder.Services.AddSingleton<SessionRevocationStore>();
 builder.Services.AddScoped<IWindowsGroupService, WindowsGroupService>();
 builder.Services.AddScoped<IUserGroupMembershipService, UserGroupMembershipService>();
 builder.Services.AddScoped<IUserValidationService, UserValidationService>();
@@ -83,6 +85,10 @@ builder.Services.AddAuthentication(options =>
         options.SlidingExpiration = true;
         options.LoginPath = "/login";
         options.AccessDeniedPath = "/access-denied";
+        // Re-check the account on every request (deleted / deactivated / demoted users, logged-out sessions).
+        options.Events.OnSigningIn = CookieSessionGuard.OnSigningIn;
+        options.Events.OnSigningOut = CookieSessionGuard.OnSigningOut;
+        options.Events.OnValidatePrincipal = CookieSessionGuard.OnValidatePrincipal;
     })
     .AddNegotiate();
 

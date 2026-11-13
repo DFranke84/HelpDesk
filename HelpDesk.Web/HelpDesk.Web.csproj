@@ -18,14 +18,16 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.Negotiate" Version="8.0.11" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.Negotiate" Version="8.0.34" />
     <PackageReference Include="Microsoft.Data.SqlClient">
-      <Version>5.2.0</Version>
+      <Version>5.2.3</Version>
     </PackageReference>
     <PackageReference Include="NLog.Database" Version="6.0.3" />
     <PackageReference Include="NLog.MailKit" Version="6.1.1" />
     <PackageReference Include="NLog.Web.AspNetCore" Version="5.3.14" />
     <PackageReference Include="MailKit" Version="4.17.0" />
+    <!-- Pinned: the version pulled in indirectly (8.0.1) has a known high-severity advisory. -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="8.0.2" />
   </ItemGroup>
 
 </Project>

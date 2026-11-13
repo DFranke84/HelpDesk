@@ -12,6 +12,15 @@ public interface IPagePermissionService
     /// <param name="pageId">Page ID</param>
     /// <returns>Page permissions for the user</returns>
     Task<PagePermissions> GetUserPagePermissionsAsync(int userId, int pageId);
+
+    /// <summary>
+    /// Get CRUD permissions for an explicit principal (id and Windows-group list are read from its claims).
+    /// Use this from Blazor components, where the HTTP context is not reliably available.
+    /// </summary>
+    /// <param name="user">Signed-in principal</param>
+    /// <param name="pageId">Page ID</param>
+    /// <returns>Page permissions for the principal; none when not signed in</returns>
+    Task<PagePermissions> GetPermissionsAsync(System.Security.Claims.ClaimsPrincipal user, int pageId);
     
     /// <summary>
     /// Get CRUD permissions for a specific user across multiple pages.

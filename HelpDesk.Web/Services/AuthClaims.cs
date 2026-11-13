@@ -10,6 +10,9 @@ public static class AuthClaims
 
     public const string LoginId = "login_id";
 
+    /// <summary>Unique id of one signed-in session; lets logout end exactly that session.</summary>
+    public const string SessionId = "session_id";
+
     /// <summary>Value matches <c>UserType</c> on the signed-in user row (person vs Windows group).</summary>
     public const string UserType = "user_type";
 

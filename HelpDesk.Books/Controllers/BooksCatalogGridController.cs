@@ -1,5 +1,7 @@
 using HelpDesk.Books.Models.Data;
+using HelpDesk.Books.Services;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,25 +16,31 @@ namespace HelpDesk.Books.Controllers;
 public sealed class BooksCatalogGridController : ControllerBase
 {
     private readonly BooksDbContext _db;
+    private readonly IBooksAccess _access;
 
     /// <summary>
     /// Create books catalog grid controller.
     /// </summary>
     /// <param name="db">Books database <see cref="BooksDbContext"/>.</param>
-    public BooksCatalogGridController(BooksDbContext db)
+    /// <param name="access">Books permission resolver <see cref="IBooksAccess"/>.</param>
+    public BooksCatalogGridController(BooksDbContext db, IBooksAccess access)
     {
         _db = db;
+        _access = access;
     }
 
     /// <summary>
-    /// List books for the catalog grid.
+    /// List books for the catalog grid. Requires Read permission on the Books page.
     /// </summary>
-    /// <param name="pageId">The page ID for permission checking (optional for backward compatibility).</param>
     /// <param name="ct">Cancellation token.</param>
-    /// <returns>JSON rows for books.</returns>
+    /// <returns>JSON rows for books, or 403 without Read permission.</returns>
     [HttpGet("catalog")]
-    public async Task<IActionResult> Catalog([FromQuery] int? pageId, CancellationToken ct)
+    public async Task<IActionResult> Catalog(CancellationToken ct)
     {
+        var permissions = await _access.GetPermissionsAsync(User, ct).ConfigureAwait(false);
+        if (!permissions.CanRead)
+            return StatusCode(StatusCodes.Status403Forbidden);
+
         var rows = await _db.Books.AsNoTracking()
             .OrderBy(b => b.Title)
             .Take(5000)

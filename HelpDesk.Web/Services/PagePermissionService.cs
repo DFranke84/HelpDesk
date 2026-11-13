@@ -1,10 +1,8 @@
 using System.Security.Claims;
-using System.Text.Json;
 using HelpDesk.Models;
 using HelpDesk.Models.Data;
 using HelpDesk.Web.Models;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Memory;
 
 namespace HelpDesk.Web.Services;
 
@@ -14,53 +12,52 @@ namespace HelpDesk.Web.Services;
 public class PagePermissionService : IPagePermissionService
 {
     private readonly IDbContextFactory<HelpDeskDbContext> _factory;
-    private readonly IMemoryCache _cache;
     private readonly IHttpContextAccessor _httpContextAccessor;
-    private readonly TimeSpan _cacheExpiry = TimeSpan.FromMinutes(10);
 
+    // Permissions are deliberately NOT cached: a cached answer kept access alive for minutes after an
+    // administrator removed it, and a cache keyed by user id leaked rights between Windows users who
+    // share one group row. Each check is a handful of small indexed queries.
     public PagePermissionService(
-        IDbContextFactory<HelpDeskDbContext> factory, 
-        IMemoryCache cache,
+        IDbContextFactory<HelpDeskDbContext> factory,
         IHttpContextAccessor httpContextAccessor)
     {
         _factory = factory;
-        _cache = cache;
         _httpContextAccessor = httpContextAccessor;
     }
 
-    public async Task<PagePermissions> GetUserPagePermissionsAsync(int userId, int pageId)
-    {
-        var cacheKey = $"page_perms_{userId}_{pageId}";
-        if (_cache.TryGetValue(cacheKey, out PagePermissions? cachedPermissions) && cachedPermissions != null)
-        {
-            return cachedPermissions;
-        }
+    public Task<PagePermissions> GetUserPagePermissionsAsync(int userId, int pageId) =>
+        GetPermissionsCoreAsync(userId, GetUserHelpdeskGroupIds(), pageId);
 
+    public Task<PagePermissions> GetPermissionsAsync(ClaimsPrincipal user, int pageId)
+    {
+        if (user?.Identity?.IsAuthenticated != true
+            || !int.TryParse(user.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var userId))
+            return Task.FromResult(new PagePermissions());
+
+        return GetPermissionsCoreAsync(userId, DeskGroupAccessResolver.GetWindowsMappedGroupUserIdsFromClaims(user), pageId);
+    }
+
+    private async Task<PagePermissions> GetPermissionsCoreAsync(int userId, List<int> groupIds, int pageId)
+    {
         await using var db = await _factory.CreateDbContextAsync().ConfigureAwait(false);
 
         // Check effective role (user + groups) - Admin gets full access
-        var effectiveRole = await GetEffectiveUserRoleAsync(db, userId);
+        var effectiveRole = await GetEffectiveUserRoleAsync(db, userId, groupIds).ConfigureAwait(false);
         if (effectiveRole == UserRole.Admin)
         {
-            var adminPermissions = new PagePermissions
+            return new PagePermissions
             {
                 CanCreate = true,
                 CanRead = true,
                 CanUpdate = true,
                 CanDelete = true
             };
-            _cache.Set(cacheKey, adminPermissions, _cacheExpiry);
-            return adminPermissions;
         }
 
         // Check if user OR any of their groups has access to this page
-        var hasGroupAccess = await HasGroupAccessToPageAsync(db, userId, pageId).ConfigureAwait(false);
+        var hasGroupAccess = await HasGroupAccessToPageAsync(db, userId, groupIds, pageId).ConfigureAwait(false);
         if (!hasGroupAccess)
-        {
-            var noAccessPermissions = new PagePermissions();
-            _cache.Set(cacheKey, noAccessPermissions, _cacheExpiry);
-            return noAccessPermissions;
-        }
+            return new PagePermissions();
 
         // Get user's direct permissions
         var userPermission = await db.UserPagePermissions.AsNoTracking()
@@ -79,7 +76,6 @@ public class PagePermissionService : IPagePermissionService
             : new PagePermissions();
 
         // Get permissions from all groups user belongs to (Windows groups mapped to HelpDesk)
-        var groupIds = GetUserHelpdeskGroupIds();
         var groupPermissions = new List<PagePermissions>();
 
         if (groupIds.Any())
@@ -104,10 +100,7 @@ public class PagePermissionService : IPagePermissionService
         // Calculate union: most permissive wins
         var allPermissions = new List<PagePermissions> { userPerms };
         allPermissions.AddRange(groupPermissions);
-        var effectivePermissions = UnionPermissions(allPermissions.ToArray());
-
-        _cache.Set(cacheKey, effectivePermissions, _cacheExpiry);
-        return effectivePermissions;
+        return UnionPermissions(allPermissions.ToArray());
     }
 
     public async Task<Dictionary<int, PagePermissions>> GetUserPagePermissionsAsync(int userId, IEnumerable<int> pageIds)
@@ -117,28 +110,25 @@ public class PagePermissionService : IPagePermissionService
 
         await using var db = await _factory.CreateDbContextAsync().ConfigureAwait(false);
 
+        var windowsGroupUserIds = GetUserHelpdeskGroupIds();
+
         // Check effective role (user + groups) - Admin gets full access
-        var effectiveRole = await GetEffectiveUserRoleAsync(db, userId);
+        var effectiveRole = await GetEffectiveUserRoleAsync(db, userId, windowsGroupUserIds).ConfigureAwait(false);
         if (effectiveRole == UserRole.Admin)
         {
-            var adminPermissions = new PagePermissions
-            {
-                CanCreate = true,
-                CanRead = true,
-                CanUpdate = true,
-                CanDelete = true
-            };
-            
             foreach (var pageId in pageIdList)
             {
-                result[pageId] = adminPermissions;
-                var cacheKey = $"page_perms_{userId}_{pageId}";
-                _cache.Set(cacheKey, adminPermissions, _cacheExpiry);
+                result[pageId] = new PagePermissions
+                {
+                    CanCreate = true,
+                    CanRead = true,
+                    CanUpdate = true,
+                    CanDelete = true
+                };
             }
             return result;
         }
 
-        var windowsGroupUserIds = GetUserHelpdeskGroupIds();
         var deskGroupIds = await DeskGroupAccessResolver.GetEffectiveDeskGroupIdsAsync(db, userId, windowsGroupUserIds)
             .ConfigureAwait(false);
 
@@ -150,13 +140,7 @@ public class PagePermissionService : IPagePermissionService
             .ToListAsync()
             .ConfigureAwait(false);
 
-        // Get user's direct permissions
-        var userPermissions = await db.UserPagePermissions.AsNoTracking()
-            .Where(upp => upp.UserId == userId && pageIdList.Contains(upp.PageId))
-            .ToListAsync()
-            .ConfigureAwait(false);
-
-        // Get group permissions (both traditional and Windows groups)
+        // Get permissions of the user and of their Windows groups
         var allEntityIds = new List<int> { userId };
         allEntityIds.AddRange(windowsGroupUserIds);
 
@@ -173,7 +157,7 @@ public class PagePermissionService : IPagePermissionService
         foreach (var pageId in pageIdList)
         {
             PagePermissions permissions;
-            
+
             if (!accessiblePages.Contains(pageId))
             {
                 // No group access = no permissions
@@ -199,10 +183,6 @@ public class PagePermissionService : IPagePermissionService
             }
 
             result[pageId] = permissions;
-            
-            // Cache individual permissions
-            var cacheKey = $"page_perms_{userId}_{pageId}";
-            _cache.Set(cacheKey, permissions, _cacheExpiry);
         }
 
         return result;
@@ -211,7 +191,7 @@ public class PagePermissionService : IPagePermissionService
     public async Task<bool> CanUserPerformActionAsync(int userId, int pageId, CrudAction action)
     {
         var permissions = await GetUserPagePermissionsAsync(userId, pageId).ConfigureAwait(false);
-        
+
         return action switch
         {
             CrudAction.Create => permissions.CanCreate,
@@ -259,10 +239,6 @@ public class PagePermissionService : IPagePermissionService
         }
 
         await db.SaveChangesAsync().ConfigureAwait(false);
-
-        // Invalidate cache
-        var cacheKey = $"page_perms_{userId}_{pageId}";
-        _cache.Remove(cacheKey);
     }
 
     public async Task RemoveUserPagePermissionsAsync(int userId, int pageId)
@@ -279,10 +255,6 @@ public class PagePermissionService : IPagePermissionService
             db.UserPagePermissions.Remove(existing);
             await db.SaveChangesAsync().ConfigureAwait(false);
         }
-
-        // Invalidate cache
-        var cacheKey = $"page_perms_{userId}_{pageId}";
-        _cache.Remove(cacheKey);
     }
 
     public async Task SetUserReadPermissionAsync(int userId, int pageId, bool canRead)
@@ -298,7 +270,7 @@ public class PagePermissionService : IPagePermissionService
         {
             existing.CanRead = canRead;
             existing.UpdatedAt = DateTime.UtcNow;
-            
+
             // If removing read access, remove all other permissions per hierarchy rules
             if (!canRead)
             {
@@ -321,58 +293,38 @@ public class PagePermissionService : IPagePermissionService
         }
 
         await db.SaveChangesAsync().ConfigureAwait(false);
-
-        // Invalidate cache
-        var cacheKey = $"page_perms_{userId}_{pageId}";
-        _cache.Remove(cacheKey);
     }
 
     /// <summary>
-    /// Windows-mapped HelpDesk <see cref="User"/> ids (<see cref="UserType.Group"/>) from claims — not <see cref="DeskGroup"/> ids.
+    /// Windows-mapped HelpDesk <see cref="User"/> ids (<see cref="UserType.Group"/>) from the current request's claims (not <see cref="DeskGroup"/> ids).
     /// </summary>
-    private List<int> GetUserHelpdeskGroupIds()
-    {
-        var user = _httpContextAccessor.HttpContext?.User;
-        if (user == null) return new List<int>();
-
-        var groupsClaim = user.FindFirst(AuthClaims.HelpdeskGroups)?.Value;
-        if (string.IsNullOrEmpty(groupsClaim)) return new List<int>();
-
-        try
-        {
-            var groupData = JsonSerializer.Deserialize<List<UserGroupClaim>>(groupsClaim);
-            return groupData?.Select(g => g.Id).ToList() ?? new List<int>();
-        }
-        catch
-        {
-            return new List<int>();
-        }
-    }
+    private List<int> GetUserHelpdeskGroupIds() =>
+        DeskGroupAccessResolver.GetWindowsMappedGroupUserIdsFromClaims(_httpContextAccessor.HttpContext?.User);
 
     /// <summary>
     /// Calculate union of permissions (most permissive wins).
     /// </summary>
-    private PagePermissions UnionPermissions(params PagePermissions[] permissions)
+    private static PagePermissions UnionPermissions(params PagePermissions[] permissions)
     {
         var result = new PagePermissions();
-        
+
         foreach (var perm in permissions)
         {
             if (perm == null) continue;
-            
+
             result.CanCreate = result.CanCreate || perm.CanCreate;
             result.CanRead = result.CanRead || perm.CanRead;
             result.CanUpdate = result.CanUpdate || perm.CanUpdate;
             result.CanDelete = result.CanDelete || perm.CanDelete;
         }
-        
+
         return result;
     }
 
     /// <summary>
     /// Get effective role considering both user role and group roles (highest wins).
     /// </summary>
-    private async Task<UserRole> GetEffectiveUserRoleAsync(HelpDeskDbContext db, int userId)
+    private static async Task<UserRole> GetEffectiveUserRoleAsync(HelpDeskDbContext db, int userId, List<int> groupIds)
     {
         // Get user's role
         var user = await db.Users.AsNoTracking()
@@ -384,7 +336,6 @@ public class PagePermissionService : IPagePermissionService
         var effectiveRole = user?.Role ?? UserRole.User;
 
         // Check if user is in any groups with higher roles
-        var groupIds = GetUserHelpdeskGroupIds();
         if (groupIds.Any())
         {
             var groupRoles = await db.Users.AsNoTracking()
@@ -401,9 +352,8 @@ public class PagePermissionService : IPagePermissionService
         return effectiveRole;
     }
 
-    private async Task<bool> HasGroupAccessToPageAsync(HelpDeskDbContext db, int userId, int pageId)
+    private static async Task<bool> HasGroupAccessToPageAsync(HelpDeskDbContext db, int userId, List<int> windowsGroupUserIds, int pageId)
     {
-        var windowsGroupUserIds = GetUserHelpdeskGroupIds();
         var deskGroupIds = await DeskGroupAccessResolver.GetEffectiveDeskGroupIdsAsync(db, userId, windowsGroupUserIds)
             .ConfigureAwait(false);
 
@@ -412,15 +362,5 @@ public class PagePermissionService : IPagePermissionService
             .Where(p => p.DeskApplication.ApplicationGroups.Any(ag => deskGroupIds.Contains(ag.DeskGroupId)))
             .AnyAsync()
             .ConfigureAwait(false);
-    }
-
-    /// <summary>
-    /// Helper class for deserializing group claims.
-    /// </summary>
-    private class UserGroupClaim
-    {
-        public int Id { get; set; }
-        public string Name { get; set; } = string.Empty;
-        public int AccessLevel { get; set; }
     }
 }
