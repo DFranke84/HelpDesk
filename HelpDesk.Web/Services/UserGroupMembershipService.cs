@@ -61,11 +61,14 @@ public class UserGroupMembershipService : IUserGroupMembershipService
     {
         try
         {
-            // First try to get from claims (fastest)
-            var groupsFromClaims = GetGroupsFromClaims();
-            if (groupsFromClaims.Any())
+            // The cookie only describes the signed-in user; for anyone else go to the database.
+            if (_currentUserContext.UserId == userId)
             {
-                return groupsFromClaims;
+                var groupsFromClaims = GetGroupsFromClaims();
+                if (groupsFromClaims.Any())
+                {
+                    return groupsFromClaims;
+                }
             }
 
             // Fallback to database query

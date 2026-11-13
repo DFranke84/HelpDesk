@@ -103,9 +103,13 @@ public class AccountController : ControllerBase
     [AllowAnonymous]
     [IgnoreAntiforgeryToken]
     [HttpPost("login")]
-    public async Task<IActionResult> Login([FromBody] LoginRequest req, CancellationToken ct)
+    public async Task<IActionResult> Login([FromBody] LoginRequest? req, CancellationToken ct)
     {
-        var loginId = AdminNameValidation.NormalizeLoginId(req.LoginId);
+        // A missing or unreadable JSON body arrives as null ([ApiController] is not used here).
+        if (req is null)
+            return BadRequest("Login ID and password required.");
+
+        var loginId= AdminNameValidation.NormalizeLoginId(req.LoginId);
         if (string.IsNullOrEmpty(loginId) || string.IsNullOrWhiteSpace(req.Password))
             return BadRequest("Login ID and password required.");
 
@@ -241,6 +245,9 @@ public class AccountController : ControllerBase
 
     public record SetPasswordRequest(string CurrentPassword, string NewPassword);
 
+    /// <summary>Rate-limiter key prefix for current-password checks (cannot collide with a login id: those never contain a space).</summary>
+    private const string CurrentPasswordGuessKeyPrefix = "set password ";
+
     /// <summary>
     /// Change password while signed in (required when <see cref="User.MustChangePassword"/> is true).
     /// </summary>
@@ -250,9 +257,12 @@ public class AccountController : ControllerBase
     [Authorize]
     [IgnoreAntiforgeryToken]
     [HttpPost("set-password")]
-    public async Task<IActionResult> SetPassword([FromBody] SetPasswordRequest req, CancellationToken ct)
+    public async Task<IActionResult> SetPassword([FromBody] SetPasswordRequest? req, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(req.NewPassword) || req.NewPassword.Length < PasswordPolicy.MinLength)
+        if (req is null)
+            return BadRequest(new { error = PasswordPolicy.MinLengthMessage });
+
+        if (string.IsNullOrWhiteSpace(req.NewPassword)|| req.NewPassword.Length < PasswordPolicy.MinLength)
             return BadRequest(new { error = PasswordPolicy.MinLengthMessage });
 
         var id = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -269,11 +279,25 @@ public class AccountController : ControllerBase
         if (string.IsNullOrEmpty(user.PasswordHash))
             return BadRequest(new { error = "Current password is incorrect." });
 
+        // Same limit as sign-in, so a stolen session cannot be used to guess the current password without end.
+        var guessKey = CurrentPasswordGuessKeyPrefix + user.Id;
+        if (_rateLimiter.IsBlocked(guessKey, out var retryAfter))
+        {
+            var minutes = (int)Math.Ceiling(retryAfter.TotalMinutes);
+            return StatusCode(StatusCodes.Status429TooManyRequests,
+                new { error = $"Too many incorrect attempts. Try again in {minutes} minute(s)." });
+        }
+
         var verify = _hasher.VerifyHashedPassword(user, user.PasswordHash, req.CurrentPassword ?? "");
         if (verify == PasswordVerificationResult.Failed)
+        {
+            _rateLimiter.RecordFailure(guessKey);
             return BadRequest(new { error = "Current password is incorrect." });
+        }
 
-        user.PasswordHash = _hasher.HashPassword(user, req.NewPassword);
+        _rateLimiter.RecordSuccess(guessKey);
+
+        user.PasswordHash= _hasher.HashPassword(user, req.NewPassword);
         user.MustChangePassword = false;
         user.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync(ct).ConfigureAwait(false);
@@ -381,9 +405,9 @@ public class AccountController : ControllerBase
     [AllowAnonymous]
     [IgnoreAntiforgeryToken]
     [HttpPost("request-password-change")]
-    public async Task<IActionResult> RequestPasswordChange([FromBody] RequestPasswordChangeRequest req, CancellationToken ct)
+    public async Task<IActionResult> RequestPasswordChange([FromBody] RequestPasswordChangeRequest? req, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(req.Email))
+        if (string.IsNullOrWhiteSpace(req?.Email))
             return BadRequest();
         var link = await _passwordReset.CreateResetTokenAsync(req.Email.Trim(), ct).ConfigureAwait(false);
         if (link is not null)
@@ -406,9 +430,9 @@ public class AccountController : ControllerBase
     [AllowAnonymous]
     [IgnoreAntiforgeryToken]
     [HttpPost("request-password-reset-by-login")]
-    public async Task<IActionResult> RequestPasswordResetByLogin([FromBody] RequestPasswordResetByLoginRequest req, CancellationToken ct)
+    public async Task<IActionResult> RequestPasswordResetByLogin([FromBody] RequestPasswordResetByLoginRequest? req, CancellationToken ct)
     {
-        var loginId = AdminNameValidation.NormalizeLoginId(req.LoginId);
+        var loginId = AdminNameValidation.NormalizeLoginId(req?.LoginId);
         if (string.IsNullOrEmpty(loginId))
             return BadRequest();
 
@@ -461,12 +485,13 @@ public class AccountController : ControllerBase
     }
 
     /// <summary>Allow only same-site relative paths (path + optional query), no scheme/host.</summary>
-    private static string SafeForgotRedirect(string? redirectAfter)
+    private string SafeForgotRedirect(string? redirectAfter)
     {
         if (string.IsNullOrWhiteSpace(redirectAfter))
             return "/login";
         var t = redirectAfter.Trim();
-        if (!t.StartsWith('/') || t.StartsWith("//", StringComparison.Ordinal))
+        // IsLocalUrl also rejects "/\host" and "//host", which browsers treat as another site.
+        if (!t.StartsWith('/') || !Url.IsLocalUrl(t))
             return "/login";
         return t;
     }
@@ -506,9 +531,9 @@ public class AccountController : ControllerBase
     [AllowAnonymous]
     [IgnoreAntiforgeryToken]
     [HttpPost("reset-password")]
-    public async Task<IActionResult> ResetPasswordApi([FromBody] ResetPasswordRequest req, CancellationToken ct)
+    public async Task<IActionResult> ResetPasswordApi([FromBody] ResetPasswordRequest? req, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(req.Token) || string.IsNullOrWhiteSpace(req.NewPassword))
+        if (req is null || string.IsNullOrWhiteSpace(req.Token) || string.IsNullOrWhiteSpace(req.NewPassword))
             return BadRequest();
         var (ok, err) = await _passwordReset.ResetPasswordAsync(req.Token, req.NewPassword, ct).ConfigureAwait(false);
         if (!ok)

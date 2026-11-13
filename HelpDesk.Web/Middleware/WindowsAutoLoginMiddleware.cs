@@ -190,7 +190,9 @@ public sealed class WindowsAutoLoginMiddleware
         using (log.BeginContext(loginId: user.LoginId, activityCategory: "Login"))
             log.LogInformation("{ActionType} {Message} {Details}", "Login", "Windows integrated login", winName);
 
-        var redirect = context.Request.PathBase + context.Request.Path + context.Request.QueryString;
+        // A path such as "//other-site/x" would be read by the browser as another site: collapse leading slashes.
+        var path = (context.Request.PathBase + context.Request.Path).ToString();
+        var redirect = "/" + path.TrimStart('/', '\\') + context.Request.QueryString;
         context.Response.Redirect(redirect);
     }
 

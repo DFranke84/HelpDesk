@@ -62,11 +62,10 @@ public class PageCrudAuthorizeAttribute : AuthorizeAttribute, IAsyncAuthorizatio
             return;
         }
 
-        // Get page ID from route/query parameters - make it optional for backward compatibility
+        // Without a page id there is nothing to check permissions against: refuse rather than wave the request through.
         if (!TryGetPageId(context, out var pageId))
         {
-            // If no pageId provided, allow the request (for backward compatibility)
-            // In a strict implementation, you could return BadRequest instead
+            context.Result = new BadRequestObjectResult($"'{PageIdParameter}' is required.");
             return;
         }
 

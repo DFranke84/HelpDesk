@@ -117,10 +117,9 @@ public sealed class ValidationTests
     [Theory]
     [InlineData("a")]
     [InlineData("1234567")]
-    [Trait(Category.Name, Category.KnownIssue)]
     public void Admin_cannot_give_a_new_user_a_password_shorter_than_the_policy(string password)
     {
-        // Users changing their own password must use 8+ characters; the admin "add user" path accepts anything.
+        // Users changing their own password must use 8+ characters; so must the admin "add user" path.
         var r = Validator.ValidateUser(new User { LoginId = "A", FirstName = "A", LastName = "B" }, isNewUser: true, password);
         Assert.False(r.IsValid, $"A {password.Length}-character password was accepted (policy minimum is {PasswordPolicy.MinLength}).");
     }

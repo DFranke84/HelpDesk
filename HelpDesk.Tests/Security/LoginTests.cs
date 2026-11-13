@@ -282,7 +282,6 @@ public sealed class LoginTests
     }
 
     [Fact]
-    [Trait(Category.Name, Category.KnownIssue)]
     public async Task Malformed_login_body_is_a_400_not_a_server_error()
     {
         var req = new HttpRequestMessage(HttpMethod.Post, "/api/account/login")

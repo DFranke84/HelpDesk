@@ -44,13 +44,48 @@ public class PasswordResetService
     /// <summary>
     /// Prefer the current HTTP request (correct port, e.g. launchSettings https://localhost:7099) over <c>App:BaseUrl</c> for links in emails.
     /// </summary>
+    /// <summary>Most reset emails one account can be sent within <see cref="ResetRequestWindow"/>.</summary>
+    public const int MaxResetRequestsPerWindow = 3;
+
+    /// <summary>Window for <see cref="MaxResetRequestsPerWindow"/>.</summary>
+    public static readonly TimeSpan ResetRequestWindow = TimeSpan.FromMinutes(15);
+
     private string GetPublicBaseUrl()
     {
-        var req = _httpContextAccessor.HttpContext?.Request;
-        if (req is not null && !string.IsNullOrEmpty(req.Host.Value))
-            return $"{req.Scheme}://{req.Host.Value}".TrimEnd('/');
+        var configured = (_configuration["App:BaseUrl"] ?? "").TrimEnd('/');
 
-        return (_configuration["App:BaseUrl"] ?? "").TrimEnd('/');
+        // The Host header is supplied by the caller. It can only be trusted when AllowedHosts restricts it;
+        // with AllowedHosts "*" an attacker could make the emailed link point at their own site.
+        var req = _httpContextAccessor.HttpContext?.Request;
+        var hostIsTrusted = req is not null && !string.IsNullOrEmpty(req.Host.Value) && !AllowsAnyHost();
+        if (hostIsTrusted || (string.IsNullOrEmpty(configured) && req is not null && !string.IsNullOrEmpty(req.Host.Value)))
+            return $"{req!.Scheme}://{req.Host.Value}".TrimEnd('/');
+
+        return configured;
+    }
+
+    private bool AllowsAnyHost()
+    {
+        var allowed = _configuration["AllowedHosts"];
+        if (string.IsNullOrWhiteSpace(allowed))
+            return true;
+        return allowed.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Any(h => h is "*" or "0.0.0.0" or "::");
+    }
+
+    /// <summary>True when this account has already been sent the maximum number of reset emails recently.</summary>
+    private async Task<bool> IsResetThrottledAsync(int userId, CancellationToken ct)
+    {
+        var since = DateTime.UtcNow - ResetRequestWindow;
+        var recent = await _db.PasswordResetTokens.AsNoTracking()
+            .CountAsync(t => t.UserId == userId && t.CreatedAt >= since, ct)
+            .ConfigureAwait(false);
+        if (recent < MaxResetRequestsPerWindow)
+            return false;
+
+        _logger.LogWarning("Password reset email suppressed for user {UserId}: {Count} requests in the last {Minutes} minutes.",
+            userId, recent, ResetRequestWindow.TotalMinutes);
+        return true;
     }
 
     /// <summary>
@@ -63,6 +98,9 @@ public class PasswordResetService
     {
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == email && u.IsActive && u.UserType == UserType.User, ct).ConfigureAwait(false);
         if (user is null)
+            return null;
+
+        if (await IsResetThrottledAsync(user.Id, ct).ConfigureAwait(false))
             return null;
 
         await InvalidateExistingTokensAsync(user.Id, ct).ConfigureAwait(false);
@@ -101,6 +139,9 @@ public class PasswordResetService
                 u => u.LoginId.ToLower() == normalized.ToLower() && u.IsActive && u.UserType == UserType.User, ct)
             .ConfigureAwait(false);
         if (user is null || string.IsNullOrWhiteSpace(user.Email))
+            return null;
+
+        if (await IsResetThrottledAsync(user.Id, ct).ConfigureAwait(false))
             return null;
 
         await InvalidateExistingTokensAsync(user.Id, ct).ConfigureAwait(false);

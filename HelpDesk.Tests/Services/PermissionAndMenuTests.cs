@@ -323,10 +323,9 @@ public sealed class PagePermissionServiceTests
     }
 
     [Fact]
-    [Trait(Category.Name, Category.KnownIssue)]
     public async Task Crud_attribute_does_not_wave_through_requests_that_omit_the_page_id()
     {
-        // Leaving "?pageId=" off the URL currently skips the permission check entirely.
+        // Leaving "?pageId=" off the URL must not skip the permission check.
         var ctx = FilterContext(Principals.For(5), query: null, allow: false);
         await new PageDeleteAuthorizeAttribute().OnAuthorizationAsync(ctx);
         Assert.NotNull(ctx.Result);
@@ -497,7 +496,6 @@ public sealed class GroupMembershipServiceTests
     }
 
     [Fact]
-    [Trait(Category.Name, Category.KnownIssue)]
     public async Task Asking_for_another_users_groups_does_not_return_my_own()
     {
         var groups = await Service(Principals.For(7, UserRole.User, 55), 7).GetUserGroupsAsync(userId: 99);

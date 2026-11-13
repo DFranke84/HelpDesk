@@ -164,7 +164,6 @@ public sealed class WindowsLoginTests
     }
 
     [Fact]
-    [Trait(Category.Name, Category.KnownIssue)]
     public async Task Windows_auto_login_never_redirects_off_site()
     {
         var sam = @"TESTDOM\" + Unique("win");
@@ -246,7 +245,6 @@ public sealed class HardeningTests
     }
 
     [Fact]
-    [Trait(Category.Name, Category.KnownIssue)]
     public async Task Reset_link_does_not_trust_the_host_header()
     {
         // appsettings.Development.json sets AllowedHosts "*"; the same happens in production if AllowedHosts is loosened.
@@ -268,7 +266,6 @@ public sealed class HardeningTests
     }
 
     [Fact]
-    [Trait(Category.Name, Category.KnownIssue)]
     public async Task Responses_carry_basic_security_headers()
     {
         var r = await _fx.NewClient().GetAsync("/login");

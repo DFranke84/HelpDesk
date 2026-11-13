@@ -145,6 +145,16 @@ app.Use(async (context, next) =>
 
     await next();
 });
+// Baseline security headers on every response (pages, API and static files).
+// script-src is intentionally not restricted: the grids use inline handlers and the Books page uses eval.
+app.Use(async (context, next) =>
+{
+    var headers = context.Response.Headers;
+    headers["X-Content-Type-Options"] = "nosniff";
+    headers["Referrer-Policy"] = "same-origin";
+    headers["Content-Security-Policy"] = "frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'";
+    await next();
+});
 app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();

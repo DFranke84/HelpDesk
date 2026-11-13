@@ -141,7 +141,6 @@ public sealed class PasswordTests
     }
 
     [Fact]
-    [Trait(Category.Name, Category.KnownIssue)]
     public async Task Guessing_the_current_password_is_rate_limited()
     {
         // With a stolen session an attacker can try current passwords without limit.
@@ -362,7 +361,6 @@ public sealed class PasswordTests
     }
 
     [Fact]
-    [Trait(Category.Name, Category.KnownIssue)]
     public async Task Forgot_password_form_rejects_backslash_redirect_trick()
     {
         // Browsers treat "/\evil.example" like "//evil.example" (another site).
@@ -372,7 +370,6 @@ public sealed class PasswordTests
     }
 
     [Fact]
-    [Trait(Category.Name, Category.KnownIssue)]
     public async Task Reset_emails_are_throttled()
     {
         // Anyone can type a login id; without a limit they can flood that person's inbox.
@@ -385,7 +382,6 @@ public sealed class PasswordTests
     }
 
     [Fact]
-    [Trait(Category.Name, Category.KnownIssue)]
     public async Task Malformed_reset_body_is_a_400_not_a_server_error()
     {
         var req = new HttpRequestMessage(HttpMethod.Post, "/api/account/reset-password")

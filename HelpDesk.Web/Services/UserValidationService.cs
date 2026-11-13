@@ -66,6 +66,11 @@ public class UserValidationService : IUserValidationService
         {
             result.AddError("Password is required for new users.");
         }
+        else if (!string.IsNullOrWhiteSpace(password) && password.Length < Validation.PasswordPolicy.MinLength)
+        {
+            // Same rule users must follow when they change their own password.
+            result.AddError($"Password must be at least {Validation.PasswordPolicy.MinLength} characters.");
+        }
 
         // Users should not have MustChangePassword = true if they're groups (this is enforced by DB constraints too)
         // Email validation could be added here if needed

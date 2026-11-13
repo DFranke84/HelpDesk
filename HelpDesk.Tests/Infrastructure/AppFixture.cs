@@ -27,7 +27,7 @@ using Microsoft.Extensions.Options;
 
 namespace HelpDesk.Tests.Infrastructure;
 
-/// <summary>Marks tests that describe how the app SHOULD behave but currently does not (each failure is a finding).</summary>
+/// <summary>Test categories. Tag a test KnownIssue when it describes how the app SHOULD behave but does not yet (each failure is a finding).</summary>
 public static class Category
 {
     public const string Name = "Category";
