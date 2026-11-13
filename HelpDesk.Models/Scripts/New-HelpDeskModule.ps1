@@ -9,14 +9,25 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+function Read-Utf8 {
+    param([string]$Path)
+    [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::UTF8)
+}
+
+function Write-Utf8 {
+    param([string]$Path, [string]$Text)
+    # UTF-8 without a byte-order mark, exactly as given (no trimming), so untouched lines stay identical.
+    [System.IO.File]::WriteAllText($Path, $Text, (New-Object System.Text.UTF8Encoding($false)))
+}
+
 function Get-RepoRoot {
     param([string]$StartDir)
-    $dir = Resolve-Path $StartDir
+    $dir = (Resolve-Path $StartDir).Path
     while ($true) {
         $sln = Join-Path $dir 'HelpDesk.sln'
-        if (Test-Path -LiteralPath $sln) { return $dir.Path }
+        if (Test-Path -LiteralPath $sln) { return $dir }
         $parent = Split-Path $dir -Parent
-        if ([string]::IsNullOrEmpty($parent) -or $parent -eq $dir.Path) {
+        if ([string]::IsNullOrEmpty($parent) -or $parent -eq $dir) {
             throw "Could not find HelpDesk.sln walking up from $StartDir"
         }
         $dir = $parent
@@ -81,8 +92,9 @@ function Add-ProgramAdditionalAssemblies {
     if ($Content -match [regex]::Escape($typeRef)) {
         return @{ Content = $Content; Changed = $false }
     }
-    $pattern = '\.AddAdditionalAssemblies\(([^)]+)\)'
-    $m = [regex]::Match($Content, $pattern)
+    # The argument list itself contains parentheses (typeof(...)), so match up to the statement's closing ");".
+    $pattern = '\.AddAdditionalAssemblies\((.*?)\)\s*;'
+    $m = [regex]::Match($Content, $pattern, [System.Text.RegularExpressions.RegexOptions]::Singleline)
     if (-not $m.Success) {
         throw "Could not find .AddAdditionalAssemblies(...) in Program.cs"
     }
@@ -91,7 +103,7 @@ function Add-ProgramAdditionalAssemblies {
         return @{ Content = $Content; Changed = $false }
     }
     $newInner = "$inner,`r`n    $typeRef.Assembly"
-    $replacement = ".AddAdditionalAssemblies($newInner)"
+    $replacement = ".AddAdditionalAssemblies($newInner);"
     $newContent = $Content.Remove($m.Index, $m.Length).Insert($m.Index, $replacement)
     return @{ Content = $newContent; Changed = $true }
 }
@@ -284,12 +296,12 @@ $csproj = @"
 </Project>
 "@
 
-Set-Content -LiteralPath (Join-Path $projectDir $csprojName) -Value $csproj.TrimEnd() -Encoding utf8
-Set-Content -LiteralPath (Join-Path $projectDir 'Models\Module.cs') -Value $moduleMarker.TrimEnd() -Encoding utf8
-Set-Content -LiteralPath (Join-Path $projectDir "Models\Data\${pascal}DbContext.cs") -Value $dbCtx.TrimEnd() -Encoding utf8
-Set-Content -LiteralPath (Join-Path $projectDir "Models\Data\${pascal}DbContextFactory.cs") -Value $dbFactory.TrimEnd() -Encoding utf8
-Set-Content -LiteralPath (Join-Path $projectDir 'Extensions\ServiceCollectionExtensions.cs') -Value $extensions.TrimEnd() -Encoding utf8
-Set-Content -LiteralPath (Join-Path $projectDir '_Imports.razor') -Value $imports.TrimEnd() -Encoding utf8
+Write-Utf8 -Path (Join-Path $projectDir $csprojName) -Text ($csproj.TrimEnd() + "`r`n")
+Write-Utf8 -Path (Join-Path $projectDir 'Models\Module.cs') -Text ($moduleMarker.TrimEnd() + "`r`n")
+Write-Utf8 -Path (Join-Path $projectDir "Models\Data\${pascal}DbContext.cs") -Text ($dbCtx.TrimEnd() + "`r`n")
+Write-Utf8 -Path (Join-Path $projectDir "Models\Data\${pascal}DbContextFactory.cs") -Text ($dbFactory.TrimEnd() + "`r`n")
+Write-Utf8 -Path (Join-Path $projectDir 'Extensions\ServiceCollectionExtensions.cs') -Text ($extensions.TrimEnd() + "`r`n")
+Write-Utf8 -Path (Join-Path $projectDir '_Imports.razor') -Text ($imports.TrimEnd() + "`r`n")
 
 $relProj = "HelpDesk.$pascal\$csprojName"
 & dotnet sln (Join-Path $repoRoot 'HelpDesk.sln') add $relProj
@@ -297,11 +309,11 @@ if ($LASTEXITCODE -ne 0) { throw "dotnet sln add failed" }
 
 if ($scope -eq 'B') {
     $webCsproj = Join-Path $repoRoot 'HelpDesk.Web\HelpDesk.Web.csproj'
-    $webXml = Get-Content -LiteralPath $webCsproj -Raw
+    $webXml = Read-Utf8 -Path $webCsproj
     $projRefLine = "    <ProjectReference Include=`"..\HelpDesk.$pascal\HelpDesk.$pascal.csproj`" />"
     if ($webXml -notmatch [regex]::Escape("HelpDesk.$pascal\HelpDesk.$pascal.csproj")) {
         $webXml = $webXml -replace '(<ProjectReference Include="\.\.\\HelpDesk\.Books\\HelpDesk\.Books\.csproj" />)', "`$1`r`n$projRefLine"
-        Set-Content -LiteralPath $webCsproj -Value $webXml.TrimEnd() -Encoding utf8
+        Write-Utf8 -Path $webCsproj -Text $webXml
     } else {
         Write-Warning 'HelpDesk.Web.csproj already references this project; skipping reference.'
     }
@@ -309,7 +321,7 @@ if ($scope -eq 'B') {
     $placeholderCs = "Server=.;Database=$pascal;MultipleActiveResultSets=true"
     foreach ($cfg in @('appsettings.json', 'appsettings.Development.json')) {
         $cfgPath = Join-Path $repoRoot "HelpDesk.Web\$cfg"
-        $json = Get-Content -LiteralPath $cfgPath -Raw
+        $json = Read-Utf8 -Path $cfgPath
         if ($json -match "`"$pascal`"\s*:") {
             Write-Warning "Connection string '$pascal' already in $cfg; skipping."
             continue
@@ -318,11 +330,11 @@ if ($scope -eq 'B') {
             throw "Could not find Books connection string in $cfgPath"
         }
         $json = $json -replace '("Books"\s*:\s*"[^"]*")(\s*\r?\n\s*\},)', "`$1,`r`n    `"$pascal`": `"$placeholderCs`"`$2"
-        Set-Content -LiteralPath $cfgPath -Value $json.TrimEnd() -Encoding utf8
+        Write-Utf8 -Path $cfgPath -Text $json
     }
 
     $programPath = Join-Path $repoRoot 'HelpDesk.Web\Program.cs'
-    $prog = Get-Content -LiteralPath $programPath -Raw
+    $prog = Read-Utf8 -Path $programPath
     $usingLine = "using HelpDesk.$pascal.Extensions;"
     if ($prog -notmatch [regex]::Escape($usingLine)) {
         $prog = $prog -replace '(using HelpDesk\.Books\.Extensions;)', "`$1`r`n$usingLine"
@@ -341,12 +353,12 @@ builder.Services.AddHelpDesk$pascal(${camel}Cs);
     }
     $asmResult = Add-ProgramAdditionalAssemblies -Content $prog -ModulePascal $pascal
     $prog = $asmResult.Content
-    Set-Content -LiteralPath $programPath -Value $prog.TrimEnd() -Encoding utf8
+    Write-Utf8 -Path $programPath -Text $prog
 
     $routesPath = Join-Path $repoRoot 'HelpDesk.Web\Components\Routes.razor'
-    $routes = Get-Content -LiteralPath $routesPath -Raw
+    $routes = Read-Utf8 -Path $routesPath
     $r = Add-AdditionalAssemblyToSource -Content $routes -ModulePascal $pascal
-    Set-Content -LiteralPath $routesPath -Value $r.Content.TrimEnd() -Encoding utf8
+    Write-Utf8 -Path $routesPath -Text $r.Content
 }
 
 Write-Host "Created HelpDesk.$pascal. Building solution..." -ForegroundColor Green
