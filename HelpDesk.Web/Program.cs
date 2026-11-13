@@ -156,6 +156,25 @@ app.Use(async (context, next) =>
     await next();
 });
 app.UseStaticFiles();
+// A page address that matches nothing would otherwise be a blank 404. Send browsers to a friendly page;
+// API calls, framework paths and file requests keep their plain 404.
+app.Use(async (context, next) =>
+{
+    await next();
+
+    var path = context.Request.Path;
+    if (context.Response.StatusCode == StatusCodes.Status404NotFound
+        && !context.Response.HasStarted
+        && HttpMethods.IsGet(context.Request.Method)
+        && !path.StartsWithSegments("/api")
+        && !path.StartsWithSegments("/not-found")
+        && !(path.Value ?? "").StartsWith("/_", StringComparison.Ordinal)
+        && !Path.HasExtension(path.Value)
+        && context.Request.Headers.Accept.ToString().Contains("text/html", StringComparison.OrdinalIgnoreCase))
+    {
+        context.Response.Redirect("/not-found");
+    }
+});
 app.UseRouting();
 app.UseAuthentication();
 app.UseMiddleware<LoggingScopeMiddleware>();

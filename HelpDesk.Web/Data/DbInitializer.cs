@@ -57,6 +57,9 @@ public static class DbInitializer
             var admin = new User
             {
                 LoginId = loginId,
+                // Names are required when a user is edited, so the seeded account must have them too.
+                FirstName = "System",
+                LastName = "Administrator",
                 Email = email,
                 Role = UserRole.Admin,
                 IsActive = true,

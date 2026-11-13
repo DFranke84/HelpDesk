@@ -241,7 +241,7 @@ window.helpdeskDiag = {
       ],
       columns: [
         { data: 'id', title: 'Id' },
-        { data: 'logged', title: 'Logged' },
+        { data: 'logged', title: 'Logged (server time)' },
         { data: 'level', title: 'Level' },
         { data: 'activityCategory', title: 'Category', defaultContent: '' },
         {

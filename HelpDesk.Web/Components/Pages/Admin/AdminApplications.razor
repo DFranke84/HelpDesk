@@ -179,7 +179,7 @@
             await InvokeAsync(StateHasChanged);
             return;
         }
-        if (!await JS.InvokeAsync<bool>("confirm", $"Delete application \"{a.Name}\"? This removes the application and its links to pages and groups (catalog pages and groups are kept)."))
+        if (!await JS.InvokeAsync<bool>("confirm", $"Delete application \"{a.Name}\"? This also deletes the application's pages (with their permissions) and its group links. The groups themselves are kept."))
             return;
 
         var row = await db.Applications.FirstOrDefaultAsync(x => x.Id == id);

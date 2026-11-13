@@ -63,7 +63,8 @@ public class GridController : ControllerBase
         return Ok(rows.Select(x => new
         {
             x.Id,
-            Logged = x.Logged.ToString("u"),
+            // NLog stores the server's local time, so do not label it as UTC ("Z").
+            Logged = x.Logged.ToString("yyyy-MM-dd HH:mm:ss"),
             x.Level,
             x.ActivityCategory,
             x.Message,

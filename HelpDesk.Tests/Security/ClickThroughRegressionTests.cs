@@ -244,6 +244,42 @@ public sealed class ClickThroughRegressionTests
         }
     }
 
+    // ── small items ─────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Unknown_page_address_leads_to_a_friendly_not_found_page()
+    {
+        var c = await _fx.LoginAsync("READER");
+        var req = new HttpRequestMessage(HttpMethod.Get, "/user/nothing/here");
+        req.Headers.Add("Accept", "text/html");
+        var r = await c.SendAsync(req);
+        Assert.True(IsRedirectTo(r, "/not-found"), "Expected a redirect to /not-found, got " + (int)r.StatusCode);
+
+        var page = await c.GetAsync("/not-found");
+        Assert.Equal(HttpStatusCode.OK, page.StatusCode);
+        Assert.Contains("Page not found", await page.Content.ReadAsStringAsync());
+
+        // API and file requests keep a plain 404.
+        Assert.Equal(HttpStatusCode.NotFound, (await c.GetAsync("/api/nothing/here")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await c.GetAsync("/js/missing.js")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Seeded_administrator_has_a_name_so_it_can_be_edited()
+    {
+        await using var db = _fx.NewDb();
+        var seeded = await db.Users.OrderBy(u => u.Id).FirstAsync();
+        Assert.True(new UserValidationService().ValidateUser(seeded, isNewUser: false).IsValid);
+    }
+
+    [Fact]
+    public async Task Log_viewer_does_not_label_local_times_as_utc()
+    {
+        var c = await _fx.LoginAsync("ADMIN1");
+        var json = await c.GetStringAsync("/api/grid/nlog");
+        Assert.DoesNotMatch(@"""logged"":""[^""]*Z""", json);
+    }
+
     // ── grids ───────────────────────────────────────────────────────
 
     [Theory]
