@@ -229,14 +229,14 @@ else
                 await JS.InvokeVoidAsync("eval", @"
                     (function() {
                         // Remove any existing script first
-                        var existingScript = document.querySelector('script[src=""/books-assets/js/booksCatalogGrids.js""]');
+                        var existingScript = document.querySelector('script[src^=""/books-assets/js/booksCatalogGrids.js""]');
                         if (existingScript) {
                             existingScript.remove();
                         }
                         
                         // Add the script
                         var script = document.createElement('script');
-                        script.src = '/books-assets/js/booksCatalogGrids.js';
+                        script.src = '/books-assets/js/booksCatalogGrids.js?v=20261112-1';
                         script.async = false; // Load synchronously relative to other scripts
                         document.head.appendChild(script);
                     })()
