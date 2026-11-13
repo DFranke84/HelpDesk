@@ -1,39 +1,58 @@
 # HelpDesk
 
-Internal help desk application built with ASP.NET Core 8 and Blazor Server.
+A help desk **portal** built with ASP.NET Core 8 and Blazor Server. It gives an organisation one signed-in front door to its internal applications: administrators define applications and pages in a catalog, decide which groups can see them, and grant each user Create / Read / Update / Delete rights page by page.
 
-## Architecture
+It is also a working template for a modular Blazor Server line-of-business app, with forms and Windows sign-in, an audit trail, structured logging, and a sample module (**Books**) that shows how to plug in a feature with its own database.
 
-The solution contains four projects:
+![Users administration](Docs/screenshots/03-users.jpg)
+
+## What it does
+
+- **Sign-in two ways.** Login ID and password, or automatic Windows (Negotiate) sign-in for domain users. Windows *groups* can be mapped to Help Desk accounts so their members need no individual account.
+- **Application catalog and menu.** Applications contain pages. A page can be a Blazor route inside the app, an external site embedded in the portal, an external link, or a menu separator. Each user's menu shows only what their groups allow.
+- **Page-level permissions.** Per user (or Windows group) and per page: Create, Read, Update, Delete. Administrators have full access. Permissions are checked on the server for every action.
+- **Administration screens.** Users, groups, applications, pages, group links, user-group assignments and a permissions matrix, all on sortable, searchable grids.
+- **Audit trail.** Every change to users, groups, applications, pages and permissions is recorded with who, when, and before/after values. Password hashes and tokens are never recorded.
+- **Logging.** NLog writes to file, to the database, and (optionally) emails alerts. Sign-ins, sign-outs and password changes are logged, and there is a built-in log viewer.
+- **Account security.** Forced password change on first sign-in, password reset by emailed one-time link, lockout after repeated failures, idle timeout.
+- **Modules.** Features live in separate class libraries. `HelpDesk.Books` is the worked example, and a PowerShell script scaffolds new ones.
+
+## Screenshots
+
+| | |
+|---|---|
+| ![Sign in](Docs/screenshots/01-sign-in.jpg) Sign in | ![Dashboard and menu](Docs/screenshots/02-dashboard-menu.jpg) Dashboard with the administrator's menu |
+| ![Page permissions](Docs/screenshots/04-page-permissions.jpg) Page-level permissions | ![Books module](Docs/screenshots/05-books-module.jpg) The Books sample module |
+| ![Users](Docs/screenshots/03-users.jpg) Users, including a mapped Windows group | ![Log viewer](Docs/screenshots/06-log-viewer.jpg) Log viewer |
+
+## Documentation
+
+| Document | What it covers |
+|---|---|
+| [Overview and process flows](Docs/HelpDesk-Functionality-Overview.md) | How the pieces fit together: sign-in, permissions, request pipeline, password reset, auditing |
+| [HelpDesk.Books](HelpDesk.Books/README.md) | The sample module and how it is wired in |
+| [Creating a module](HelpDesk.Models/Scripts/README.md) | Scaffolding a new module with `New-HelpDeskModule.ps1` |
+| [Migration naming](Docs/EF-Migrations-Naming.md) | Conventions for EF Core migrations |
+
+## Solution layout
 
 | Project | Purpose |
-|---------|---------|
-| **HelpDesk.Web** | Blazor Server host — UI, controllers, middleware, services |
-| **HelpDesk.Models** | EF Core domain models, DbContext, migrations |
-| **HelpDesk.Books** | Books catalog library — models, controllers, UI components |
-| **HelpDesk.Logging** | Cross-cutting logging and logger abstractions (NLog) |
+|---|---|
+| `HelpDesk.Web` | The Blazor Server host: pages, controllers, middleware, services |
+| `HelpDesk.Models` | Entities, `HelpDeskDbContext`, EF Core migrations, module scaffolding script |
+| `HelpDesk.Books` | Sample module: Books catalog with its own database, API and page |
+| `HelpDesk.Logging` | Logging helpers (correlation ids, user context) on top of NLog |
+| `HelpDesk.Tests` | Automated tests (xUnit, bUnit) that run the real application |
 
-### Key technology
-
-- **.NET 8** / Blazor Server (interactive server-side rendering)
-- **Entity Framework Core 8** with SQL Server
-- **Cookie + Windows Negotiate** authentication
-- **NLog** for structured logging (file, database, email alerts)
-- **jQuery DataTables** for admin grids (JS interop)
-
-### Middleware pipeline (order matters)
-
-1. `LoggingScopeMiddleware` — sets correlation and user context for NLog
-2. `WindowsAutoLoginMiddleware` — auto-signs-in domain users via Negotiate
-3. `MustChangePasswordMiddleware` — redirects users who must change their password
-4. Authorization / Antiforgery
-
-## Prerequisites
-
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
-- SQL Server (local or remote)
+Technology: .NET 8, Blazor Server (interactive server rendering), Entity Framework Core 8 with SQL Server, cookie and Negotiate authentication, NLog, MailKit, jQuery DataTables.
 
 ## Getting started
+
+### Prerequisites
+
+- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
+- SQL Server (any edition; LocalDB is enough for development and is required by the tests)
+- Visual Studio 2022 with IIS Express. The web project is configured for IIS in-process hosting, so run it with the **IIS Express** profile rather than `dotnet run`.
 
 ### 1. Clone and restore
 
@@ -43,162 +62,120 @@ cd HelpDesk
 dotnet restore
 ```
 
-### 2. Configure connection strings
+### 2. Set the connection strings
 
-The application uses [User Secrets](https://learn.microsoft.com/en-us/aspnet/core/security/app-secrets) for sensitive configuration in development. Non-sensitive defaults are in `appsettings.json`.
+Secrets are kept out of the repository. In development they come from [User Secrets](https://learn.microsoft.com/aspnet/core/security/app-secrets):
 
 ```
 cd HelpDesk.Web
-dotnet user-secrets set "ConnectionStrings:HelpDesk" "Server=.;Database=HelpDesk;User Id=<user>;Password=<password>;TrustServerCertificate=True;MultipleActiveResultSets=true"
-dotnet user-secrets set "ConnectionStrings:Books" "Server=.;Database=Books;User Id=<user>;Password=<password>;TrustServerCertificate=True;MultipleActiveResultSets=true"
+dotnet user-secrets set "ConnectionStrings:HelpDesk" "Server=.;Database=HelpDesk;Integrated Security=true;TrustServerCertificate=true;MultipleActiveResultSets=true"
+dotnet user-secrets set "ConnectionStrings:Books" "Server=.;Database=Books;Integrated Security=true;TrustServerCertificate=true;MultipleActiveResultSets=true"
 ```
 
-For Windows integrated auth, omit `User Id` and `Password` and use `Integrated Security=True` instead.
+### 3. Create the databases
 
-### 3. Configure SMTP (optional)
+- **HelpDesk database.** Created and migrated automatically at start-up when `App:DbInit` is `true`. It is `true` in `appsettings.Development.json` and `false` by default everywhere else.
+- **Books database.** Not created automatically. Run the scripts in `HelpDesk.Books/Models/Scripts` (`HelpDesk-BooksInitial.sql`, then optionally `SeedBooks50.sql` for sample data).
 
-SMTP credentials should also go in User Secrets:
+### 4. Configure email (optional)
+
+Needed only for password-reset emails and error alerts:
 
 ```
+dotnet user-secrets set "Smtp:Direct:Host" "<smtp-host>"
 dotnet user-secrets set "Smtp:Direct:User" "<smtp-user>"
 dotnet user-secrets set "Smtp:Direct:Password" "<smtp-password>"
-dotnet user-secrets set "Smtp:AlertTo" "<alert-email>"
-dotnet user-secrets set "Smtp:NormalTo" "<normal-email>"
+dotnet user-secrets set "Smtp:AlertTo" "<alert-address>"
+dotnet user-secrets set "Smtp:NormalTo" "<notification-address>"
 ```
 
-### 4. Run
+`Smtp:Mode` selects the `Direct` or `Standard` profile. If mail cannot be sent, the application logs the failure and carries on.
+
+### 5. Run
+
+Open `HelpDesk.sln` in Visual Studio and start the **IIS Express** profile (`https://localhost:44343`).
+
+On first start with an empty database the application creates one administrator:
+
+- Login ID: `ADMIN`
+- Password: the value of `App:InitialAdminPassword` (`ChangeMe!123` unless you change it)
+
+You must choose a new password at first sign-in. Change `App:InitialAdminPassword` before deploying anywhere real.
+
+## Running the tests
 
 ```
-cd HelpDesk.Web
-dotnet run --launch-profile https
+dotnet test HelpDesk.Tests
 ```
 
-The app will:
-1. Apply any pending EF Core migrations automatically on startup
-2. Seed an initial admin account if no users exist (login: `ADMIN`, password: `ChangeMe!123`)
-3. Open at **https://localhost:7099**
+The suite starts the real application in memory against two throwaway LocalDB databases, which it creates and drops itself. Email is captured, never sent. It covers sign-in, lockout, password change and reset, every route's access rules, permissions, sessions, Windows sign-in, the Books module, validation and the audit trail.
 
-The initial admin password must be changed on first login.
+## Security model in brief
 
-## Database
+- Every route requires a signed-in user unless explicitly marked anonymous. Admin pages and admin data require the `Admin` role.
+- The session cookie is `Secure`, `HttpOnly`, and re-checked on every request: deleting, deactivating or demoting an account takes effect on its next request, and a logged-out session cannot be replayed.
+- Permissions are read fresh from the database on every check, so revoking access is immediate.
+- HTTPS only. Baseline security headers are sent on every response.
+- JSON endpoints require an `X-Requested-With` header (cross-site request forgery defence).
+- Sign-in and current-password checks lock out after 5 failures in 15 minutes. Password-reset emails are limited to 3 per account per 15 minutes.
+- The application will not let you delete, deactivate or demote the last active administrator.
 
-### Migrations
+Details and diagrams are in the [overview](Docs/HelpDesk-Functionality-Overview.md).
 
-Migrations live in `HelpDesk.Models/Migrations/`. To add a new migration:
+## Deployment (IIS)
+
+1. Publish: `dotnet publish HelpDesk.Web -c Release -o ./publish`
+2. Install the [ASP.NET Core Hosting Bundle](https://dotnet.microsoft.com/download/dotnet/8.0) on the server.
+3. Create an IIS site on the `publish` folder with an application pool set to **No Managed Code**.
+4. For Windows sign-in, enable both **Windows Authentication** and **Anonymous Authentication** on the site. Anonymous is needed for the sign-in page; the application itself decides who is signed in.
+5. Supply settings through environment variables or `appsettings.Production.json`. Never deploy development secrets.
+
+| Environment variable | Setting |
+|---|---|
+| `ConnectionStrings__HelpDesk` | HelpDesk database |
+| `ConnectionStrings__Books` | Books database |
+| `Smtp__Direct__Host`, `Smtp__Direct__User`, `Smtp__Direct__Password` | Mail server |
+| `App__BaseUrl` | Public address of the site |
+| `App__InitialAdminPassword` | First-run administrator password |
+
+### Production checklist
+
+- [ ] `AllowedHosts` lists the real host name(s), not `*`
+- [ ] `App:BaseUrl` is the public address (used in password-reset emails when `AllowedHosts` is `*`)
+- [ ] `App:InitialAdminPassword` changed, and the administrator has signed in and set a new password
+- [ ] `App:DbInit` decided: `true` to migrate at start-up, or apply migrations yourself
+- [ ] Mail settings tested
+- [ ] NLog file path and database target are valid on the server
+- [ ] If the grid scripts in `wwwroot/js` change, bump their `?v=` value in `Components/App.razor` so browsers reload them
+
+## Configuration reference
+
+Settings under `App` in `appsettings.json`:
+
+| Key | Default | Meaning |
+|---|---|---|
+| `DbInit` | `false` | Apply migrations and seed data at start-up |
+| `BaseUrl` | `https://localhost:5001` | Public address used for reset links when the host header cannot be trusted |
+| `InitialAdminLoginId` | `ADMIN` | Login ID of the first-run administrator |
+| `InitialAdminPassword` | `ChangeMe!123` | Its initial password (must be changed at first sign-in) |
+| `PasswordResetTokenHours` | `1` | Lifetime of reset links requested by email address (links requested by login ID last 10 minutes) |
+| `WindowsAutoLoginChallenge` | `true` | Offer Windows sign-in to browsers on page loads |
+| `SuppressWindowsAutoLoginMinutes` | `1` | After a manual sign-out, how long to hold off automatic Windows sign-in |
+| `EnableWindowsGroupIntegration` | `true` | Map Windows groups to Help Desk group accounts |
+| `LoginRateLimit:MaxAttempts` | `5` | Failed attempts before lockout |
+| `LoginRateLimit:WindowMinutes` | `15` | Lockout window |
+
+## Database migrations
+
+Migrations for the main database live in `HelpDesk.Models/Migrations`:
 
 ```
 cd HelpDesk.Models
 dotnet ef migrations add <MigrationName> --startup-project ../HelpDesk.Web
 ```
 
-Migrations are applied automatically at startup via `DbInitializer.MigrateAsync`. See `Docs/EF-Migrations-Naming.md` for naming conventions.
+See [migration naming](Docs/EF-Migrations-Naming.md).
 
-### Books catalog
+## License
 
-The Books catalog functionality has been moved to a separate `HelpDesk.Books` library project. This includes a secondary `BooksDbContext` that connects to a separate `Books` database, demonstrating external database integration and modular architecture. See the `HelpDesk.Books` project documentation.
-
-## Authentication
-
-The app supports two authentication modes:
-
-- **Forms login** — username/password with cookie authentication
-- **Windows Negotiate** — automatic domain login for intranet users
-
-Windows auto-login can be suppressed per-user (manual logout sets a cookie that prevents re-negotiation for a configurable period).
-
-Login is rate-limited: after 5 failed attempts within 15 minutes, the account is temporarily blocked. These defaults are configurable via `App:LoginRateLimit:MaxAttempts` and `App:LoginRateLimit:WindowMinutes`.
-
-## Authorization
-
-- **Fallback policy**: all routes require an authenticated user by default
-- **Admin role**: admin pages (`/admin/*`) and diagnostics (`/diag/*`) require `Role = Admin`
-- **Group-based catalog access**: non-admin users see only applications and pages assigned to their groups
-
-## Project structure
-
-```
-HelpDesk.Web/
-├── Components/
-│   ├── Layout/          # MainLayout, LoginLayout
-│   ├── Pages/           # Razor page components
-│   └── ...              # Shared components (NavMenu, LoginPanel, etc.)
-├── Controllers/         # MVC endpoints (account, grid APIs)
-├── Middleware/           # Request pipeline middleware
-├── Services/            # Application services (auth, email, menus, etc.)
-├── Data/                # DbInitializer (startup seeding)
-├── Configuration/       # SMTP profile merging
-├── Validation/          # Shared validation helpers
-└── wwwroot/
-    ├── js/              # DataTables interop, auth, idle timeout
-    └── css/             # Application styles
-
-HelpDesk.Models/
-├── Data/                # DbContexts and design-time factory
-├── External/            # External database context factory
-├── Migrations/          # EF Core migrations
-└── *.cs                 # Domain entities (User, DeskApplication, etc.)
-
-HelpDesk.Books/
-├── Models/              # Book and Publisher entities, BooksDbContext, migrations, SQL scripts
-│   ├── Data/            # BooksDbContext and design-time factory
-│   ├── Migrations/      # Books database migrations
-│   └── Scripts/         # SQL scripts for Books database setup
-├── Controllers/         # Books catalog API controller
-├── Components/          # BooksCatalog Blazor component
-├── Extensions/          # Service registration extensions
-└── wwwroot/js/          # Books-specific JavaScript
-
-HelpDesk.Logging/
-└── *.cs                 # Correlation, logger, event log abstractions
-```
-
-## Deployment
-
-### IIS hosting
-
-1. Publish the application:
-   ```
-   dotnet publish HelpDesk.Web -c Release -o ./publish
-   ```
-2. Create an IIS site pointing to the `publish` folder.
-3. Install the [ASP.NET Core Hosting Bundle](https://dotnet.microsoft.com/download/dotnet/8.0) on the server.
-4. Set the application pool to **No Managed Code**.
-5. For Windows Negotiate authentication, enable **Windows Authentication** on the IIS site and disable **Anonymous Authentication**.
-6. Configure environment-specific settings via environment variables or a production `appsettings.Production.json` (do **not** copy development secrets).
-
-### Environment variables
-
-Sensitive values should be set as environment variables rather than stored in configuration files:
-
-| Variable | Maps to |
-|----------|---------|
-| `ConnectionStrings__HelpDesk` | `ConnectionStrings:HelpDesk` |
-| `ConnectionStrings__Books` | `ConnectionStrings:Books` |
-| `Smtp__Direct__User` | `Smtp:Direct:User` |
-| `Smtp__Direct__Password` | `Smtp:Direct:Password` |
-| `App__BaseUrl` | `App:BaseUrl` |
-
-### Production checklist
-
-- [ ] Rotate any credentials that were committed to source control during development
-- [ ] Set `AllowedHosts` to the production hostname(s)
-- [ ] Set `App:BaseUrl` to the production URL (used in password reset emails)
-- [ ] Confirm SMTP settings and test email delivery
-- [ ] Verify the initial admin password is changed on first login
-- [ ] Enable HTTPS and set `CookieSecurePolicy.Always` (already the default)
-- [ ] Review NLog targets — ensure file paths and database connection strings are valid
-
-## Configuration reference
-
-Key settings in `appsettings.json` under `App`:
-
-| Key | Default | Description |
-|-----|---------|-------------|
-| `BaseUrl` | `https://localhost:5001` | Base URL for password reset email links |
-| `InitialAdminLoginId` | `ADMIN` | Login ID for the seeded admin account |
-| `InitialAdminPassword` | `ChangeMe!123` | Initial password (must be changed on first login) |
-| `PasswordResetTokenHours` | `1` | Hours before a password reset token expires |
-| `WindowsAutoLoginChallenge` | `true` | Enable Windows Negotiate auto-login |
-| `SuppressWindowsAutoLoginMinutes` | `1` | Minutes to suppress auto-login after manual logout |
-| `LoginRateLimit:MaxAttempts` | `5` | Failed attempts before login is blocked |
-| `LoginRateLimit:WindowMinutes` | `15` | Duration of the rate limit window |
+[MIT](LICENSE)

@@ -1,192 +1,219 @@
-# HelpDesk Application - Functionality Overview
+# HelpDesk: overview and process flows
 
-## User Authentication & Access Control
-- **Provides access using the User table**
-  - Access can be granted via individual User/password authentication
-  - Access can be granted via Windows groups (Active Directory integration)
-  - Access can be granted via built-in Windows authentication
-  - Provides auto login using Windows groups via Negotiate authentication
-  - Provides auto login for individual users associated to domain IDs (SAM account names/UPN)
-  - Supports mixed authentication modes (cookie-based and Windows integrated)
-  - Implements session management with sliding expiration (~60 minutes)
-  - Forces password changes for users flagged with MustChangePassword
-  - Provides password reset functionality via email tokens
-  - Implements login rate limiting with configurable attempts and time windows
+This document explains what the application is made of and how its main processes work. For installation and configuration see the [README](../README.md).
 
-- **User Role Management**
-  - Supports Admin and standard user roles
-  - Admin users bypass all permission checks
-  - Standard users subject to granular page-level permissions
-  - Users can be associated with multiple desk groups for access control
+## 1. The idea
 
-- **Page-level CRUD Permissions**
-  - Individual users can have Create/Read/Update/Delete permissions per page
-  - Group-based users inherit permissions from Windows group mappings
-  - Effective permissions are union of direct user permissions and group permissions
-  - Permission checks enforced at API and navigation levels
+HelpDesk is a signed-in portal. Three things define what a person sees:
 
-## Application Catalog & Navigation
-- **Dynamic Application Catalog**
-  - Applications can be enabled/disabled and ordered for display
-  - Applications can use internal database or external database connections
-  - Applications support both internal Blazor routes and external URLs
-  - External URLs can open in new tabs or embedded iframes
-  - Page types include regular pages, gradient separators, and shaded separators
+1. **Who they are**: a row in the `Users` table (a person, or a Windows group that people sign in through).
+2. **Which groups they belong to**: groups are linked to applications, and that link decides which applications appear in the menu.
+3. **What they may do on each page**: a Create / Read / Update / Delete record per user (or Windows group) per page.
 
-- **Menu & Navigation System**
-  - Group-based access control determines visible applications and pages
-  - Navigation guards prevent unauthorized route access
-  - Support for nested routing within applications
-  - Dynamic menu generation based on user permissions and group memberships
+Administrators skip steps 2 and 3: they see and may do everything.
 
-## Database Management & Architecture
-- **Multi-Database Support**
-  - Primary HelpDesk database for core functionality
-  - Support for external application-specific databases via connection string keys
-  - Books module demonstrates separate database integration pattern
-  - Database factory pattern for proper context management in Blazor
+## 2. Building blocks
 
-- **Entity Framework Core Integration**
-  - Automatic database migrations on startup (configurable)
-  - Design-time database context factories for development
-  - Change tracking and audit history for all major entities
-  - UTC datetime handling and concurrency control with row versioning
+```mermaid
+flowchart LR
+    Browser -->|HTTPS| IIS[IIS / IIS Express]
+    IIS --> Web[HelpDesk.Web<br/>Blazor Server host]
+    Web --> Books[HelpDesk.Books<br/>sample module]
+    Web --> Models[HelpDesk.Models<br/>entities + EF Core]
+    Web --> Logging[HelpDesk.Logging<br/>NLog helpers]
+    Books --> Models
+    Models --> HelpDeskDb[(HelpDesk database)]
+    Books --> BooksDb[(Books database)]
+    Logging --> LogFile[Log files]
+    Logging --> HelpDeskDb
+    Web -->|MailKit| Smtp[Mail server]
+```
 
-- **Data Seeding & Initialization**
-  - Automatic admin user creation if no users exist
-  - Configurable database initialization process
-  - Sample data seeding for development environments
-  - Books catalog integration and sample data setup
+| Project | Contents |
+|---|---|
+| `HelpDesk.Web` | Pages (`Components/`), API controllers (`Controllers/`), middleware, services, start-up (`Program.cs`) |
+| `HelpDesk.Models` | Entities, `HelpDeskDbContext`, migrations, audit-trail capture |
+| `HelpDesk.Books` | A complete module: entities, its own `BooksDbContext`, a grid API, a Blazor page, its script |
+| `HelpDesk.Logging` | `EventLogManager`, correlation ids and user context for log entries |
+| `HelpDesk.Tests` | Tests that run the real application against throwaway databases |
 
-## Logging & Monitoring
-- **Multi-Target Logging System**
-  - File-based logging with rolling file configuration
-  - Database logging via stored procedures
-  - Email alerting for critical errors via SMTP
-  - Structured logging with correlation IDs and user context
-  - Activity categorization and elapsed time tracking
+## 3. Data model
 
-- **Admin Log Viewer**
-  - Web-based NLog entry viewer with filtering capabilities
-  - Search by correlation ID, log levels, and activity categories
-  - Maximum 500 entries per query for performance
-  - Real-time log monitoring through admin interface
+```mermaid
+erDiagram
+    Users ||--o{ UserGroups : "member of"
+    Groups ||--o{ UserGroups : has
+    Groups ||--o{ ApplicationGroups : "may open"
+    Applications ||--o{ ApplicationGroups : "opened by"
+    Applications ||--o{ Pages : contains
+    Users ||--o{ UserPagePermissions : holds
+    Pages ||--o{ UserPagePermissions : "controlled by"
+    Users ||--o{ PasswordResetTokens : requests
+```
 
-- **Audit & Change History**
-  - Automatic change tracking for all major entities
-  - JSON-based change storage with before/after values
-  - Sensitive field exclusion (passwords, tokens) from audit logs
-  - Admin interface for viewing entity change history
-  - User and timestamp tracking for all changes
+| Table | Meaning |
+|---|---|
+| `Users` | People **and** Windows groups (`UserType` = User or Group). Holds role (User / Admin), active flag, password hash, optional Windows account name |
+| `Groups` | Catalog groups, used only to decide which applications someone can open |
+| `Applications` | Entries in the menu. May name an external connection string for a module database |
+| `Pages` | Pages of an application: an internal route, an external URL (embedded or new tab), or a separator |
+| `ApplicationGroups` | Which groups may open which applications |
+| `UserGroups` | Which users (or Windows groups) belong to which catalog groups |
+| `UserPagePermissions` | Create / Read / Update / Delete flags per user-or-Windows-group per page |
+| `EntityChangeHistory` | The audit trail |
+| `NLOG` | Log entries written by NLog |
+| `PasswordResetTokens` | Hashed one-time reset tokens with expiry |
 
-## Email & Communication
-- **SMTP Configuration Support**
-  - Direct SMTP configuration for simple setups
-  - Standard SMTP configuration with authentication
-  - Profile-based SMTP switching between Direct and Standard modes
-  - MailKit integration for robust email delivery
-  - Rate limiting for email alerts to prevent spam
+## 4. Request pipeline
 
-- **Email-Based Features**
-  - Password reset tokens sent via email with expiration
-  - Account notifications and alerts
-  - System alert emails for critical errors
-  - Configurable email templates and formatting
+Every request passes through these steps in order (`Program.cs`):
 
-## API & Integration Layer
-- **RESTful API Endpoints**
-  - Account management APIs (login, logout, password changes)
-  - Grid data APIs for admin interfaces using DataTables format
-  - Diagnostic endpoints for development troubleshooting
-  - Rate limiting and security headers for API protection
-  - JSON and form-based authentication endpoints
+```mermaid
+flowchart TD
+    A[Request] --> B{HTTPS?}
+    B -- no --> B1[403]
+    B -- yes --> C[Security headers added]
+    C --> D[Static files]
+    D --> E[Cookie authentication<br/>session re-checked against the database]
+    E --> F[Logging scope<br/>correlation id + user]
+    F --> G[Windows auto sign-in<br/>page loads only]
+    G --> H[Must-change-password gate]
+    H --> I[Authorization<br/>signed-in by default, Admin role for admin routes]
+    I --> J[Controller or Blazor page]
+    J --> K{Nothing matched?}
+    K -- "page address" --> L[Page not found]
+    K -- "API or file" --> M[Plain 404]
+```
 
-- **Cross-Origin & Security Features**
-  - Required fetch headers for API security
-  - CSRF protection for form submissions
-  - Secure cookie configuration
-  - AllowedHosts configuration for deployment security
+Points worth knowing:
 
-## User Interface & Experience
-- **Blazor Server Architecture**
-  - Interactive server-side rendering for responsive UI
-  - Real-time updates without page refreshes
-  - Error boundaries for graceful error handling
-  - SignalR integration for server-client communication
+- **Session re-check.** On every request the cookie's account is looked up. If the account was deleted or deactivated, or the session was logged out, the cookie is rejected. If the role changed, the cookie is updated.
+- **A Windows identity alone is not a session.** Under IIS a request can arrive already identified as a Windows account. Until the application has matched it to a Help Desk account and issued its own cookie, the request is treated as anonymous.
 
-- **Admin Interface**
-  - DataTables-based admin grids for all major entities
-  - CRUD operations for users, applications, pages, groups
-  - Permission matrix management interface
-  - Bulk operations support for administrative tasks
+## 5. Signing in
 
-- **Responsive Design**
-  - Bootstrap-based styling and components
-  - jQuery and DataTables integration for enhanced interactions
-  - Mobile-friendly responsive layouts
-  - Accessibility features and proper ARIA labeling
+```mermaid
+flowchart TD
+    Start[Open any page] --> HasCookie{Valid Help Desk cookie?}
+    HasCookie -- yes --> In[Signed in]
+    HasCookie -- no --> Suppressed{Signed out manually<br/>in the last few minutes?}
+    Suppressed -- yes --> LoginPage[Sign-in page]
+    Suppressed -- no --> Win{Browser supplies a<br/>Windows identity?}
+    Win -- no --> LoginPage
+    Win -- yes --> Person{Active person account with<br/>matching SAM name or UPN?}
+    Person -- yes --> Issue[Issue cookie, log the sign-in]
+    Person -- no --> WinGroup{Member of a Windows group<br/>mapped to a Help Desk group account?}
+    WinGroup -- yes --> Issue
+    WinGroup -- no --> LoginPage
+    LoginPage --> Form[Login ID + password]
+    Form --> Locked{5 failures in 15 minutes?}
+    Locked -- yes --> Wait[Locked: try again later]
+    Locked -- no --> Check{Password correct<br/>and account active?}
+    Check -- no --> Form
+    Check -- yes --> Issue
+    Issue --> MustChange{Must change password?}
+    MustChange -- yes --> NewPw[Choose a new password] --> In
+    MustChange -- no --> In
+```
 
-## Modular Architecture & Extensibility
-- **Plugin-Based Module System**
-  - Books module demonstrates extension pattern
-  - Embedded static assets in modules (CSS, JS, images)
-  - Module-specific database contexts and migrations
-  - Automatic module discovery and route registration
+- Windows group sign-in: the person has no row of their own. They are signed in as the mapped group account, with that account's catalog groups, permissions and role. If several mapped groups match, their permissions are combined.
+- Automatic Windows sign-in happens only on page loads. A submitted form, including the sign-in form, is always handled as submitted.
+- Sign-in, sign-out and password changes are written to the log with the login ID.
 
-- **PowerShell Automation**
-  - New-HelpDeskModule.ps1 script for creating new modules
-  - Automatic project scaffolding with proper structure
-  - Solution file updates and project references
-  - Build automation and dependency management
+## 6. What a user may see and do
 
-## Configuration Management
-- **Environment-Specific Settings**
-  - Development vs Production configuration profiles
-  - Connection string management for multiple databases
-  - Feature flags for optional functionality (DB initialization, detailed errors)
-  - SMTP profile switching and email configuration
+```mermaid
+flowchart TD
+    Q[May this user do X on this page?] --> Admin{Administrator?<br/>own role, or an Admin Windows group}
+    Admin -- yes --> Full[Yes: full access]
+    Admin -- no --> Linked{Is one of the user's catalog groups<br/>linked to the page's application,<br/>and is the page active?}
+    Linked -- no --> None[No access]
+    Linked -- yes --> Rows[Collect permission rows for the user<br/>and for each of their Windows groups]
+    Rows --> Union[Combine: any row granting X is enough]
+    Union --> Result{X granted?}
+    Result -- yes --> Yes[Allowed]
+    Result -- no --> None
+```
 
-- **Windows Integration Settings**
-  - Active Directory group mapping configuration
-  - Windows group access level ranking system
-  - Group membership caching with configurable timeouts
-  - Domain filtering for local vs domain groups
+- The **menu** lists the applications reachable through the user's groups and their active pages.
+- **Opening a page** is checked again on the server (a route guard), so typing an address directly does not bypass the menu.
+- **Actions** are checked on the server at the moment they happen. Hiding or disabling a button is only a convenience.
+- Permissions are **not cached**. A change made by an administrator applies to the user's next action, even on a page they already have open.
+- Read is the base permission: removing Read removes Create, Update and Delete.
 
-## Security & Compliance
-- **Password Security**
-  - Hashed password storage (no plaintext)
-  - Password policy enforcement
-  - Forced password changes on first login
-  - Secure password reset token generation and expiration
+## 7. Password reset
 
-- **Session Security**
-  - Secure cookie configuration with HttpOnly and Secure flags
-  - Session timeout and idle detection
-  - Automatic logout for inactive sessions
-  - Anti-forgery token protection
+```mermaid
+sequenceDiagram
+    actor U as User
+    participant W as HelpDesk
+    participant D as Database
+    participant M as Mail server
+    U->>W: Forgot password (login ID)
+    W->>D: Find active account with an email address
+    alt found, and fewer than 3 requests in 15 minutes
+        W->>D: Cancel older tokens, store hash of a new random token
+        W->>M: Email one-time link (valid 10 minutes)
+    end
+    W-->>U: "If that account exists, a link has been sent"
+    U->>W: Open link, enter new password
+    W->>D: Token valid, unused and unexpired?
+    alt yes
+        W->>D: Save new password hash, mark token used
+        W-->>U: Password updated, sign in
+    else no
+        W-->>U: Link invalid or expired
+    end
+```
 
-## Development & Debugging Support
-- **Development Tools**
-  - Client-side diagnostic logging for Blazor errors
-  - Detailed error pages in development mode
-  - Database seeding and test data generation
-  - Hot reload support for rapid development
+- The reply is identical whether or not the account exists, and whether or not the email could be sent, so the form cannot be used to discover login IDs.
+- Only a hash of the token is stored; the token itself exists only in the email.
+- The link's address comes from the request host when `AllowedHosts` restricts it, otherwise from `App:BaseUrl`.
 
-- **Deployment Support**
-  - IIS in-process hosting configuration
-  - Connection string externalization
-  - Environment-specific logging configuration
-  - Production-ready security headers and policies
+## 8. Administration
 
-## External System Integration
-- **Active Directory Integration**
-  - Windows group membership resolution
-  - User principal name and SAM account mapping
-  - Token group enumeration for group memberships
-  - Configurable group access ranking for permission inheritance
+| Screen | Purpose |
+|---|---|
+| Users | People and Windows group accounts: role, active flag, password, Windows account name |
+| Groups | Catalog groups |
+| Applications | Menu applications, display order, optional external database key |
+| Pages | Pages of each application: route, embedded URL, new-tab URL, or separator |
+| Application groups | Which groups may open which applications |
+| User groups | Which users belong to which groups |
+| User page permissions | The Create / Read / Update / Delete matrix |
+| Change history | The audit trail, with before/after values |
+| NLog | Log viewer with level and category filters |
 
-- **Database Integration Patterns**
-  - External database connection string resolution
-  - Factory pattern for multiple database contexts
-  - Migration support for external databases
-  - Connection pooling and resource management
+Safeguards: you cannot delete your own account, the last active administrator cannot be deleted, deactivated or demoted, and names of groups, applications and login IDs must be unique.
+
+## 9. Audit trail and logging
+
+- **Audit trail.** When `HelpDeskDbContext` saves, it records each inserted, changed or deleted user, group, application, page, link and permission in `EntityChangeHistory`, with the acting user and JSON before/after values. Password hashes and reset tokens are excluded.
+- **Logging.** NLog writes to rolling files and to the `NLOG` table, and can email alerts. Each request carries a correlation id, so all entries for one request can be found together. The log viewer shows the server's local time.
+
+## 10. Modules
+
+A module is a Razor class library with its own entities, database context, API controller, page and script. `HelpDesk.Books` is the example:
+
+- The host registers it with `AddHelpDeskBooks(connectionString)` and `MapHelpDeskBooks()`, and adds its assembly to the Blazor router.
+- The catalog has an application and a page whose route is the module's page (`/user/books/books`).
+- The module asks the host what the current user may do through `IBooksAccess`, which the host implements with the central permission rules. The module's page and its data API both use it, so the module cannot drift from the rest of the application.
+
+To start a new module, see [Creating a module](../HelpDesk.Models/Scripts/README.md). A new module should follow the same pattern: define a small access interface, have the host implement it with `IPagePermissionService`, and check it on the server in both the page and the API.
+
+## 11. Security summary
+
+| Area | Measure |
+|---|---|
+| Transport | HTTPS only; HSTS outside development |
+| Session | `Secure`, `HttpOnly` cookie; 60-minute sliding expiry; re-validated on every request; logged-out sessions refused |
+| Passwords | Stored as salted hashes (ASP.NET Core Identity hasher); minimum 8 characters; forced change at first sign-in |
+| Brute force | Lockout after 5 failed sign-ins, or 5 wrong current passwords, in 15 minutes |
+| Reset | Random 256-bit one-time tokens, stored hashed, short-lived; 3 emails per account per 15 minutes |
+| Cross-site requests | JSON endpoints require `X-Requested-With`; cookies are `SameSite=Lax` |
+| Redirects | Only local addresses are accepted as return targets |
+| Headers | `X-Content-Type-Options`, `Referrer-Policy`, and a Content-Security-Policy limiting framing, base URL, form targets and plugins |
+| Output | Grid cells escape database text before display |
+| Errors | No stack traces outside development; mail failures are logged, not shown |
+
+Known limits: the list of logged-out sessions is held in memory, so an application restart forgets it (a copied cookie could then be reused until it expires, at most 60 minutes). The Content-Security-Policy does not restrict scripts, because the grids use inline handlers.

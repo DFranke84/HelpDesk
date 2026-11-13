@@ -131,3 +131,10 @@ The library also depends on the host application providing:
 - jQuery and DataTables libraries
 - Bootstrap CSS framework
 - Authentication and authorization infrastructure
+## Permissions
+
+The module does not decide access by itself. It asks the host through `IBooksAccess` (`Services/IBooksAccess.cs`), which returns the current user's Read / Create / Update / Delete rights for the Books page.
+
+- The host must register an implementation: `services.AddScoped<IBooksAccess, BooksAccess>()`. `HelpDesk.Web` implements it with its central permission rules.
+- `BooksCatalog.razor` re-checks the rights on the server before every add, edit and delete. Disabled buttons in the grid are only a convenience.
+- `GET /api/grid/books/catalog` returns 403 without Read permission.
